@@ -4,42 +4,75 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#08090c">
+  <meta name="theme-color" content="#0c0c0c">
   <title>Celio</title>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
   <style>
+    :root {
+      color-scheme: dark;
+      --background: rgb(12, 12, 12);
+      --border: #292929;
+      --text: #f5f5f5;
+      --muted: #929292;
+      --blue: #1684ff;
+      --blue-hover: #3294ff;
+      --input: #0e0e0e;
+    }
+
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
     body {
-      margin: 0;
       min-height: 100vh;
-      padding: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #08090c;
-      color: #f5f6f8;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 24px;
+      background: var(--background);
+      color: var(--text);
+      font-family: "Google Sans", Arial, sans-serif;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .container {
+    .auth {
       width: 100%;
-      max-width: 480px;
+      max-width: 390px;
+      animation: appear 180ms ease-out;
     }
 
-    .panel {
-      padding: 32px;
-      background: #111318;
-      border: 1px solid #262a33;
+    @keyframes appear {
+      from {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     h1 {
-      margin: 0 0 28px;
-      font-size: 25px;
-      font-weight: 600;
-      letter-spacing: -0.7px;
+      font-size: 29px;
+      font-weight: 500;
+      letter-spacing: -0.8px;
+      text-align: center;
+      margin-bottom: 9px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 400;
+      text-align: center;
+      margin-bottom: 34px;
     }
 
     .field {
@@ -48,93 +81,125 @@
 
     label {
       display: block;
-      margin-bottom: 8px;
-      color: #9298a5;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.7px;
+      margin-bottom: 9px;
+      font-size: 13px;
+      color: #dedede;
+    }
+
+    .input-wrap {
+      position: relative;
     }
 
     input {
-      display: block;
       width: 100%;
-      height: 48px;
+      height: 50px;
       padding: 0 14px;
-      border: 1px solid #292d36;
-      border-radius: 0;
-      outline: none;
-      background: #0b0d12;
-      color: #f5f6f8;
-      font: inherit;
+      background: var(--input);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: inherit;
       font-size: 14px;
+      font-weight: 400;
+      outline: none;
+      transition: border-color 150ms ease;
     }
 
     input::placeholder {
-      color: #666c78;
+      color: #686868;
+    }
+
+    input:hover {
+      border-color: #414141;
     }
 
     input:focus {
-      border-color: #0a84ff;
+      border-color: var(--blue);
     }
 
-    button {
+    .password-input {
+      padding-right: 64px;
+    }
+
+    .show-password {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 50px;
+      padding: 0 14px;
+      background: transparent;
+      border: none;
+      color: #a0a0a0;
+      font-family: inherit;
+      font-size: 12px;
       cursor: pointer;
-      font: inherit;
     }
 
-    .submit {
+    .show-password:hover {
+      color: white;
+    }
+
+    .primary-button {
       width: 100%;
-      height: 48px;
-      margin-top: 2px;
-      border: 0;
-      border-radius: 0;
-      background: #0a84ff;
-      color: #fff;
+      height: 49px;
+      margin-top: 5px;
+      border: 1px solid var(--blue);
+      border-radius: 5px;
+      background: var(--blue);
+      color: white;
+      font-family: inherit;
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 150ms ease;
     }
 
-    .submit:hover {
-      background: #168cff;
+    .primary-button:hover {
+      background: var(--blue-hover);
+      border-color: var(--blue-hover);
     }
 
-    .submit:disabled {
-      cursor: wait;
+    .primary-button:disabled {
       opacity: 0.65;
+      cursor: wait;
+    }
+
+    button:focus-visible {
+      outline: 2px solid white;
+      outline-offset: 3px;
+    }
+
+    .message {
+      min-height: 18px;
+      margin-top: 14px;
+      color: #f08c8c;
+      font-size: 12px;
+      font-weight: 400;
+      text-align: center;
     }
 
     .switch {
-      margin-top: 22px;
+      margin-top: 14px;
       text-align: center;
-      color: #9298a5;
+      color: var(--muted);
       font-size: 13px;
+      font-weight: 400;
     }
 
-    .switch button {
+    .text-button {
+      background: none;
+      border: none;
       padding: 0;
-      border: 0;
-      background: transparent;
-      color: #0a84ff;
+      margin-left: 3px;
+      color: var(--blue);
+      font-family: inherit;
       font-size: inherit;
+      font-weight: 500;
+      cursor: pointer;
     }
 
-    .notice {
-      margin: 16px 0 0;
-      color: #9298a5;
-      text-align: center;
-      font-size: 12px;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
-
-    .notice.error {
-      color: #ff6961;
-    }
-
-    .notice strong {
-      color: #f5f6f8;
-      font-size: 16px;
-      font-weight: 600;
+    .text-button:hover {
+      color: var(--blue-hover);
     }
 
     [hidden] {
@@ -142,32 +207,34 @@
     }
 
     @media (max-width: 480px) {
-      body {
-        padding: 16px;
+      .auth {
+        max-width: 100%;
       }
+    }
 
-      .panel {
-        padding: 24px;
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
       }
     }
   </style>
 </head>
 
 <body>
-  <main class="container">
-    <section class="panel">
-      <h1 id="heading">Create account</h1>
+  <main class="auth">
+    <section id="loginScreen">
+      <h1>Welcome back</h1>
+      <p class="subtitle">Sign in to your account</p>
 
-      <form id="auth-form">
+      <form id="loginForm" autocomplete="on">
         <div class="field">
-          <label for="name">USERNAME</label>
+          <label for="loginIdentifier">Username or email</label>
           <input
-            id="name"
-            name="name"
+            id="loginIdentifier"
+            name="username"
             type="text"
-            placeholder="Enter your username"
-            minlength="3"
-            maxlength="20"
+            placeholder="Enter your username or email"
             autocomplete="username"
             autocapitalize="none"
             spellcheck="false"
@@ -176,247 +243,182 @@
         </div>
 
         <div class="field">
-          <label for="password">PASSWORD</label>
+          <label for="loginPassword">Password</label>
+          <div class="input-wrap">
+            <input
+              class="password-input"
+              id="loginPassword"
+              name="password"
+              type="password"
+              placeholder="Enter your password"
+              autocomplete="current-password"
+              required
+            >
+            <button class="show-password" type="button" data-password="loginPassword">Show</button>
+          </div>
+        </div>
+
+        <button class="primary-button" type="submit">Log in</button>
+        <p class="message" id="loginMessage" role="status" aria-live="polite"></p>
+      </form>
+
+      <p class="switch">
+        Don't have an account?
+        <button class="text-button" type="button" id="openSignup">Create account</button>
+      </p>
+    </section>
+
+    <section id="signupScreen" hidden>
+      <h1>Create account</h1>
+      <p class="subtitle">Get started with Celio</p>
+
+      <form id="signupForm" autocomplete="on">
+        <div class="field">
+          <label for="signupUsername">Username</label>
           <input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="Enter your password"
-            minlength="8"
-            maxlength="72"
-            autocomplete="new-password"
+            id="signupUsername"
+            name="username"
+            type="text"
+            placeholder="Choose a username"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            minlength="3"
+            maxlength="24"
             required
           >
         </div>
 
-        <button class="submit" id="submit-button" type="submit">
-          Create account
-        </button>
+        <div class="field">
+          <label for="signupEmail">Email address</label>
+          <input
+            id="signupEmail"
+            name="email"
+            type="email"
+            placeholder="Enter your email"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="signupPassword">Password</label>
+          <div class="input-wrap">
+            <input
+              class="password-input"
+              id="signupPassword"
+              name="new-password"
+              type="password"
+              placeholder="Create a password"
+              autocomplete="new-password"
+              minlength="8"
+              required
+            >
+            <button class="show-password" type="button" data-password="signupPassword">Show</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="confirmPassword">Confirm password</label>
+          <input
+            id="confirmPassword"
+            name="confirm-password"
+            type="password"
+            placeholder="Enter your password again"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          >
+        </div>
+
+        <button class="primary-button" type="submit">Create account</button>
+        <p class="message" id="signupMessage" role="status" aria-live="polite"></p>
       </form>
 
-      <div class="switch">
-        <span id="switch-text">Already have an account?</span>
-        <button type="button" id="switch-button">Sign in</button>
-      </div>
-
-      <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
+      <p class="switch">
+        Already have an account?
+        <button class="text-button" type="button" id="openLogin">Log in</button>
+      </p>
     </section>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <script>
-    const SUPABASE_URL = "https://grwomhavguicvwpguvyk.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_M4wWQwe4v_d4TyS0OcJblQ_7bsdudPG";
+    const loginScreen = document.getElementById("loginScreen");
+    const signupScreen = document.getElementById("signupScreen");
 
-    const form = document.getElementById("auth-form");
-    const nameInput = document.getElementById("name");
-    const passwordInput = document.getElementById("password");
-    const heading = document.getElementById("heading");
-    const submitButton = document.getElementById("submit-button");
-    const switchText = document.getElementById("switch-text");
-    const switchButton = document.getElementById("switch-button");
-    const notice = document.getElementById("notice");
+    const loginForm = document.getElementById("loginForm");
+    const signupForm = document.getElementById("signupForm");
 
-    let signingIn = false;
+    const loginMessage = document.getElementById("loginMessage");
+    const signupMessage = document.getElementById("signupMessage");
 
-    const client = window.supabase
-      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
-      : null;
+    function showScreen(screen) {
+      const showSignup = screen === "signup";
 
-    function showNotice(message, isError = false) {
-      notice.replaceChildren();
-      notice.textContent = message;
-      notice.classList.toggle("error", isError);
-      notice.hidden = false;
+      loginScreen.hidden = showSignup;
+      signupScreen.hidden = !showSignup;
+
+      loginMessage.textContent = "";
+      signupMessage.textContent = "";
+
+      document.title = showSignup ? "Create account | Celio" : "Login | Celio";
+
+      const heading = (showSignup ? signupScreen : loginScreen).querySelector("h1");
+      heading.setAttribute("tabindex", "-1");
+      heading.focus();
     }
 
-    function showAccount(username, phoneNumber, message) {
-      notice.replaceChildren();
-
-      const description = document.createElement("span");
-      description.textContent = message;
-
-      const lineBreak = document.createElement("br");
-
-      const number = document.createElement("strong");
-      number.textContent = phoneNumber || "Number unavailable";
-
-      notice.append(description, lineBreak, number);
-      notice.classList.remove("error");
-      notice.hidden = false;
-    }
-
-    function friendlyError(error, fallback) {
-      const message = error?.message || "";
-
-      if (/failed to fetch|networkerror/i.test(message)) {
-        return "Couldn't connect to Supabase. Check your connection and try again.";
-      }
-
-      if (/invalid login credentials/i.test(message)) {
-        return "Incorrect username or password.";
-      }
-
-      if (/username.*taken|already registered|already exists/i.test(message)) {
-        return "That username is already taken.";
-      }
-
-      if (/email rate limit exceeded/i.test(message)) {
-        return "Supabase's email rate limit was reached. Please wait before trying again.";
-      }
-
-      if (/invalid jwt|missing authorization header/i.test(message)) {
-        return "Supabase rejected the function request. Check the celio-auth function's JWT verification settings.";
-      }
-
-      return message || fallback;
-    }
-
-    switchButton.addEventListener("click", () => {
-      signingIn = !signingIn;
-
-      heading.textContent = signingIn ? "Sign in" : "Create account";
-      submitButton.textContent = signingIn ? "Sign in" : "Create account";
-
-      switchText.textContent = signingIn
-        ? "Don't have an account?"
-        : "Already have an account?";
-
-      switchButton.textContent = signingIn
-        ? "Create account"
-        : "Sign in";
-
-      passwordInput.autocomplete = signingIn
-        ? "current-password"
-        : "new-password";
-
-      passwordInput.minLength = signingIn ? 1 : 8;
-      notice.hidden = true;
+    document.getElementById("openSignup").addEventListener("click", () => {
+      showScreen("signup");
     });
 
-    form.addEventListener("submit", async (event) => {
+    document.getElementById("openLogin").addEventListener("click", () => {
+      showScreen("login");
+    });
+
+    document.querySelectorAll("[data-password]").forEach(button => {
+      button.addEventListener("click", () => {
+        const input = document.getElementById(button.dataset.password);
+        const showing = input.type === "password";
+
+        input.type = showing ? "text" : "password";
+        button.textContent = showing ? "Hide" : "Show";
+        button.setAttribute("aria-pressed", String(showing));
+      });
+    });
+
+    loginForm.addEventListener("submit", event => {
       event.preventDefault();
 
-      if (!client) {
-        showNotice("The Supabase library did not load. Refresh the page and try again.", true);
+      if (!loginForm.reportValidity()) return;
+
+      loginMessage.style.color = "#929292";
+      loginMessage.textContent = "Login will work once Firebase is connected.";
+    });
+
+    signupForm.addEventListener("submit", event => {
+      event.preventDefault();
+
+      if (!signupForm.reportValidity()) return;
+
+      const password = document.getElementById("signupPassword").value;
+      const confirmPassword = document.getElementById("confirmPassword").value;
+
+      if (password !== confirmPassword) {
+        signupMessage.style.color = "#f08c8c";
+        signupMessage.textContent = "Passwords do not match.";
         return;
       }
 
-      const username = nameInput.value.trim();
-      const password = passwordInput.value;
+      signupMessage.style.color = "#929292";
+      signupMessage.textContent = "Account creation will work once Firebase is connected.";
+    });
 
-      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-        showNotice(
-          "Use 3–20 characters: letters, numbers, or underscores.",
-          true
-        );
-        return;
-      }
-
-      if (password.length < 8 || password.length > 72) {
-        showNotice("Your password must be between 8 and 72 characters.", true);
-        return;
-      }
-
-      submitButton.disabled = true;
-      submitButton.textContent = signingIn ? "Signing in..." : "Creating account...";
-      notice.hidden = true;
-
-      try {
-        const email = username.toLowerCase() + "@celio.app";
-
-        if (signingIn) {
-          const { data, error } = await client.auth.signInWithPassword({
-            email,
-            password
-          });
-
-          if (error) {
-            throw error;
-          }
-
-          const { data: profile, error: profileError } = await client
-            .from("profiles")
-            .select("username, phone_number")
-            .eq("id", data.user.id)
-            .single();
-
-          if (profileError) {
-            showNotice(
-              "Signed in, but your profile could not be loaded. Check the profiles table policies.",
-              true
-            );
-            return;
-          }
-
-          showAccount(
-            profile.username,
-            profile.phone_number,
-            "Signed in successfully."
-          );
-        } else {
-          const { data: result, error: functionError } =
-            await client.functions.invoke("celio-auth", {
-              body: {
-                action: "signup",
-                username,
-                password
-              }
-            });
-
-          if (functionError) {
-            let detail = functionError.message;
-
-            try {
-              const response = functionError.context;
-              if (response && typeof response.json === "function") {
-                const body = await response.json();
-                if (body.error) {
-                  detail = body.error;
-                }
-              }
-            } catch {
-              // Keep the original function error.
-            }
-
-            throw new Error(detail || "Account creation failed.");
-          }
-
-          if (!result?.success) {
-            throw new Error(result?.error || "Account creation failed.");
-          }
-
-          const { data: loginData, error: loginError } =
-            await client.auth.signInWithPassword({
-              email,
-              password
-            });
-
-          if (loginError) {
-            showAccount(
-              username,
-              result.phoneNumber,
-              "Your account was created. Your Celio number is:"
-            );
-            return;
-          }
-
-          showAccount(
-            username,
-            result.phoneNumber,
-            "Account created successfully. Your Celio number is:"
-          );
-        }
-      } catch (error) {
-        showNotice(
-          friendlyError(error, "Something went wrong. Please try again."),
-          true
-        );
-      } finally {
-        submitButton.disabled = false;
-        submitButton.textContent = signingIn ? "Sign in" : "Create account";
-      }
+    [loginForm, signupForm].forEach(form => {
+      form.addEventListener("input", () => {
+        const message = form === loginForm ? loginMessage : signupMessage;
+        message.textContent = "";
+      });
     });
   </script>
 </body>
