@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#08090c">
   <title>Celio</title>
+
   <style>
     * {
       box-sizing: border-box;
@@ -32,7 +33,6 @@
       padding: 32px;
       background: #111318;
       border: 1px solid #262a33;
-      border-radius: 0;
     }
 
     h1 {
@@ -98,6 +98,11 @@
       background: #168cff;
     }
 
+    .submit:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
     .switch {
       margin-top: 22px;
       text-align: center;
@@ -108,14 +113,9 @@
     .switch button {
       padding: 0;
       border: 0;
-      border-radius: 0;
       background: transparent;
       color: #0a84ff;
       font-size: inherit;
-    }
-
-    .switch button:hover {
-      color: #56aaff;
     }
 
     .notice {
@@ -124,6 +124,11 @@
       text-align: center;
       font-size: 12px;
       line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .notice.error {
+      color: #ff6961;
     }
 
     [hidden] {
@@ -187,10 +192,16 @@
     </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <script>
+    const SUPABASE_URL = "https://grwomhavguicvwpguvyk.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_M4wWQwe4v_d4TyS0OcJblQ_7bsdudPG";
+
     const form = document.getElementById("auth-form");
+    const nameInput = document.getElementById("name");
+    const passwordInput = document.getElementById("password");
     const heading = document.getElementById("heading");
-    const password = document.getElementById("password");
     const submitButton = document.getElementById("submit-button");
     const switchText = document.getElementById("switch-text");
     const switchButton = document.getElementById("switch-button");
@@ -198,16 +209,17 @@
 
     let signingIn = false;
 
+    function showNotice(message, isError = false) {
+      notice.textContent = message;
+      notice.classList.toggle("error", isError);
+      notice.hidden = false;
+    }
+
     switchButton.addEventListener("click", () => {
       signingIn = !signingIn;
 
-      heading.textContent = signingIn
-        ? "Sign in"
-        : "Create account";
-
-      submitButton.textContent = signingIn
-        ? "Sign in"
-        : "Create account";
+      heading.textContent = signingIn ? "Sign in" : "Create account";
+      submitButton.textContent = signingIn ? "Sign in" : "Create account";
 
       switchText.textContent = signingIn
         ? "Don't have an account?"
@@ -217,18 +229,96 @@
         ? "Create account"
         : "Sign in";
 
-      password.autocomplete = signingIn
+      passwordInput.autocomplete = signingIn
         ? "current-password"
         : "new-password";
 
-      password.minLength = signingIn ? 1 : 8;
+      passwordInput.minLength = signingIn ? 1 : 8;
       notice.hidden = true;
     });
 
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      notice.textContent = "Authentication isn't connected yet.";
-      notice.hidden = false;
+
+      const username = nameInput.value.trim();
+      const password = passwordInput.value;
+
+      if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
+        showNotice(
+          "Use 3–24 characters: letters, numbers, or underscores.",
+          true
+        );
+        return;
+      }
+
+      if (!signingIn && password.length < 8) {
+        showNotice("Your password must be at least 8 characters.", true);
+        return;
+      }
+
+      if (
+        SUPABASE_URL === "PASTE_YOUR_PROJECT_URL" ||
+        SUPABASE_KEY === "PASTE_YOUR_PUBLISHABLE_KEY"
+      ) {
+        showNotice("Add your Supabase URL and publishable key first.", true);
+        return;
+      }
+
+      if (!window.supabase) {
+        showNotice("Couldn't load the authentication library. Refresh and try again.", true);
+        return;
+      }
+
+      submitButton.disabled = true;
+      submitButton.textContent = signingIn ? "Signing in..." : "Creating account...";
+      notice.hidden = true;
+
+      try {
+        const client = window.supabase.createClient(
+          SUPABASE_URL,
+          SUPABASE_KEY
+        );
+
+        const email = username.toLowerCase() + "@celio.app";
+
+        if (signingIn) {
+          const { error } = await client.auth.signInWithPassword({
+            email,
+            password
+          });
+
+          if (error) throw error;
+
+          showNotice("Signed in successfully. Your account is connected.");
+        } else {
+          const { data, error } = await client.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                username
+              }
+            }
+          });
+
+          if (error) throw error;
+
+          if (data.session) {
+            showNotice("Account created successfully. Next, we'll assign your Celio number.");
+          } else {
+            showNotice("Account created. Supabase requires email confirmation before you can sign in. We'll configure this next.");
+          }
+        }
+      } catch (error) {
+        if (error.message?.toLowerCase().includes("fetch")) {
+          showNotice("Couldn't connect. Check your Supabase URL and publishable key.", true);
+        } else {
+          showNotice(error.message || "Something went wrong. Try again.", true);
+        }
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = signingIn ? "Sign in" : "Create account";
+      }
     });
   </script>
 </body>
