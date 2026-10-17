@@ -413,29 +413,35 @@
       line-height: 1.5;
     }
 
-    .typing-indicator {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      align-self: flex-start;
-      padding: 11px 14px;
-      margin: 0 24px 10px;
-      background: #202020;
-      border-radius: 14px 14px 14px 4px;
-      width: fit-content;
-      animation: messageAppear .18s ease-out;
-    }
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  min-width: 64px;
+  height: 38px;
+  padding: 0 14px;
+  margin: 8px 0;
+  border-radius: 18px 18px 18px 5px;
+  background: #202127;
+  box-sizing: border-box;
+}
 
-    .typing-indicator span {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #a0a0a0;
-      animation: typingBounce 1.2s infinite ease-in-out;
-    }
+.typing-indicator span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a4a7b0;
+  animation: typingBounce 1.2s infinite ease-in-out;
+}
 
-    .typing-indicator span:nth-child(2) { animation-delay: .15s; }
-    .typing-indicator span:nth-child(3) { animation-delay: .3s; }
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.3s;
+}
 
     @keyframes typingBounce {
       0%, 60%, 100% {
