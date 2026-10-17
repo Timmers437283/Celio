@@ -123,12 +123,18 @@
       color: #9298a5;
       text-align: center;
       font-size: 12px;
-      line-height: 1.5;
+      line-height: 1.6;
       overflow-wrap: anywhere;
     }
 
     .notice.error {
       color: #ff6961;
+    }
+
+    .notice strong {
+      color: #f5f6f8;
+      font-size: 16px;
+      font-weight: 600;
     }
 
     [hidden] {
@@ -146,6 +152,7 @@
     }
   </style>
 </head>
+
 <body>
   <main class="container">
     <section class="panel">
@@ -159,8 +166,11 @@
             name="name"
             type="text"
             placeholder="Enter your username"
-            maxlength="24"
+            minlength="3"
+            maxlength="20"
             autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
             required
           >
         </div>
@@ -173,6 +183,7 @@
             type="password"
             placeholder="Enter your password"
             minlength="8"
+            maxlength="72"
             autocomplete="new-password"
             required
           >
@@ -188,7 +199,7 @@
         <button type="button" id="switch-button">Sign in</button>
       </div>
 
-      <p class="notice" id="notice" role="status" hidden></p>
+      <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
     </section>
   </main>
 
@@ -209,10 +220,57 @@
 
     let signingIn = false;
 
+    const client = window.supabase
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+      : null;
+
     function showNotice(message, isError = false) {
+      notice.replaceChildren();
       notice.textContent = message;
       notice.classList.toggle("error", isError);
       notice.hidden = false;
+    }
+
+    function showAccount(username, phoneNumber, message) {
+      notice.replaceChildren();
+
+      const description = document.createElement("span");
+      description.textContent = message;
+
+      const lineBreak = document.createElement("br");
+
+      const number = document.createElement("strong");
+      number.textContent = phoneNumber || "Number unavailable";
+
+      notice.append(description, lineBreak, number);
+      notice.classList.remove("error");
+      notice.hidden = false;
+    }
+
+    function friendlyError(error, fallback) {
+      const message = error?.message || "";
+
+      if (/failed to fetch|networkerror/i.test(message)) {
+        return "Couldn't connect to Supabase. Check your connection and try again.";
+      }
+
+      if (/invalid login credentials/i.test(message)) {
+        return "Incorrect username or password.";
+      }
+
+      if (/username.*taken|already registered|already exists/i.test(message)) {
+        return "That username is already taken.";
+      }
+
+      if (/email rate limit exceeded/i.test(message)) {
+        return "Supabase's email rate limit was reached. Please wait before trying again.";
+      }
+
+      if (/invalid jwt|missing authorization header/i.test(message)) {
+        return "Supabase rejected the function request. Check the celio-auth function's JWT verification settings.";
+      }
+
+      return message || fallback;
     }
 
     switchButton.addEventListener("click", () => {
@@ -240,32 +298,24 @@
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
 
+      if (!client) {
+        showNotice("The Supabase library did not load. Refresh the page and try again.", true);
+        return;
+      }
+
       const username = nameInput.value.trim();
       const password = passwordInput.value;
 
-      if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
         showNotice(
-          "Use 3–24 characters: letters, numbers, or underscores.",
+          "Use 3–20 characters: letters, numbers, or underscores.",
           true
         );
         return;
       }
 
-      if (!signingIn && password.length < 8) {
-        showNotice("Your password must be at least 8 characters.", true);
-        return;
-      }
-
-      if (
-        SUPABASE_URL === "PASTE_YOUR_PROJECT_URL" ||
-        SUPABASE_KEY === "PASTE_YOUR_PUBLISHABLE_KEY"
-      ) {
-        showNotice("Add your Supabase URL and publishable key first.", true);
-        return;
-      }
-
-      if (!window.supabase) {
-        showNotice("Couldn't load the authentication library. Refresh and try again.", true);
+      if (password.length < 8 || password.length > 72) {
+        showNotice("Your password must be between 8 and 72 characters.", true);
         return;
       }
 
@@ -274,47 +324,95 @@
       notice.hidden = true;
 
       try {
-        const client = window.supabase.createClient(
-          SUPABASE_URL,
-          SUPABASE_KEY
-        );
-
         const email = username.toLowerCase() + "@celio.app";
 
         if (signingIn) {
-          const { error } = await client.auth.signInWithPassword({
+          const { data, error } = await client.auth.signInWithPassword({
             email,
             password
           });
 
-          if (error) throw error;
-
-          showNotice("Signed in successfully. Your account is connected.");
-        } else {
-          const { data, error } = await client.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                username
-              }
-            }
-          });
-
-          if (error) throw error;
-
-          if (data.session) {
-            showNotice("Account created successfully. Next, we'll assign your Celio number.");
-          } else {
-            showNotice("Account created. Supabase requires email confirmation before you can sign in. We'll configure this next.");
+          if (error) {
+            throw error;
           }
+
+          const { data: profile, error: profileError } = await client
+            .from("profiles")
+            .select("username, phone_number")
+            .eq("id", data.user.id)
+            .single();
+
+          if (profileError) {
+            showNotice(
+              "Signed in, but your profile could not be loaded. Check the profiles table policies.",
+              true
+            );
+            return;
+          }
+
+          showAccount(
+            profile.username,
+            profile.phone_number,
+            "Signed in successfully."
+          );
+        } else {
+          const { data: result, error: functionError } =
+            await client.functions.invoke("celio-auth", {
+              body: {
+                action: "signup",
+                username,
+                password
+              }
+            });
+
+          if (functionError) {
+            let detail = functionError.message;
+
+            try {
+              const response = functionError.context;
+              if (response && typeof response.json === "function") {
+                const body = await response.json();
+                if (body.error) {
+                  detail = body.error;
+                }
+              }
+            } catch {
+              // Keep the original function error.
+            }
+
+            throw new Error(detail || "Account creation failed.");
+          }
+
+          if (!result?.success) {
+            throw new Error(result?.error || "Account creation failed.");
+          }
+
+          const { data: loginData, error: loginError } =
+            await client.auth.signInWithPassword({
+              email,
+              password
+            });
+
+          if (loginError) {
+            showAccount(
+              username,
+              result.phoneNumber,
+              "Your account was created. Your Celio number is:"
+            );
+            return;
+          }
+
+          showAccount(
+            username,
+            result.phoneNumber,
+            "Account created successfully. Your Celio number is:"
+          );
         }
       } catch (error) {
-        if (error.message?.toLowerCase().includes("fetch")) {
-          showNotice("Couldn't connect. Check your Supabase URL and publishable key.", true);
-        } else {
-          showNotice(error.message || "Something went wrong. Try again.", true);
-        }
+        showNotice(
+          friendlyError(error, "Something went wrong. Please try again."),
+          true
+        );
       } finally {
         submitButton.disabled = false;
         submitButton.textContent = signingIn ? "Sign in" : "Create account";
@@ -323,4 +421,3 @@
   </script>
 </body>
 </html>
-
