@@ -2,1196 +2,335 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0c0c0c">
-  <title>Celio</title>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #0c0c0c;
-      --panel: #111111;
-      --border: #292929;
-      --text: #f5f5f5;
-      --muted: #929292;
-      --blue: #00c8e8;
-      --blue-hover: #35d6ef;
-      --input: #0e0e0e;
-      --red: #f08c8c;
-      --green: #70d7a3;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-      font-family: "Google Sans", Arial, sans-serif;
-      font-weight: 500;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    button, input {
-      font: inherit;
-    }
-
-    button {
-      cursor: pointer;
-    }
-
-    button:focus-visible, input:focus-visible {
-      outline: 2px solid var(--blue);
-      outline-offset: 3px;
-    }
-
-    [hidden] {
-      display: none !important;
-    }
-
-    .auth-wrap {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-
-    .auth {
-      width: 100%;
-      max-width: 390px;
-      animation: appear 180ms ease-out;
-    }
-
-    @keyframes appear {
-      from { opacity: 0; transform: translateY(5px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    h1 {
-      font-size: 29px;
-      font-weight: 500;
-      letter-spacing: -0.8px;
-      text-align: center;
-      margin-bottom: 9px;
-    }
-
-    .subtitle {
-      color: var(--muted);
-      font-size: 14px;
-      font-weight: 400;
-      text-align: center;
-      margin-bottom: 32px;
-    }
-
-    .field {
-      margin-bottom: 19px;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 9px;
-      color: #dedede;
-      font-size: 13px;
-    }
-
-    input {
-      width: 100%;
-      height: 47px;
-      padding: 0 13px;
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      background: var(--input);
-      color: var(--text);
-      font-size: 14px;
-      font-weight: 400;
-      outline: none;
-    }
-
-    input::placeholder {
-      color: #686868;
-    }
-
-    input:focus {
-      border-color: var(--blue);
-    }
-
-    .input-wrap {
-      position: relative;
-    }
-
-    .input-wrap input {
-      padding-right: 65px;
-    }
-
-    .show-password {
-      position: absolute;
-      top: 0;
-      right: 0;
-      height: 47px;
-      padding: 0 13px;
-      border: none;
-      background: transparent;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .primary {
-      width: 100%;
-      min-height: 46px;
-      padding: 0 15px;
-      border: 1px solid var(--blue);
-      border-radius: 5px;
-      background: var(--blue);
-      color: #061114;
-      font-size: 14px;
-      font-weight: 600;
-      transition: background 150ms ease;
-    }
-
-    .primary:hover {
-      background: var(--blue-hover);
-    }
-
-    .primary:disabled {
-      opacity: 0.6;
-      cursor: wait;
-    }
-
-    .secondary {
-      min-height: 37px;
-      padding: 0 12px;
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      background: transparent;
-      color: var(--text);
-      font-size: 13px;
-    }
-
-    .secondary:hover {
-      background: #1b1b1b;
-    }
-
-    .text-button {
-      padding: 0;
-      border: none;
-      background: transparent;
-      color: var(--blue);
-      font-size: inherit;
-    }
-
-    .text-button:hover {
-      color: var(--blue-hover);
-    }
-
-    .switch {
-      margin-top: 17px;
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 400;
-      text-align: center;
-    }
-
-    .message {
-      min-height: 18px;
-      margin-top: 12px;
-      color: var(--red);
-      font-size: 12px;
-      font-weight: 400;
-      line-height: 1.5;
-      overflow-wrap: anywhere;
-    }
-
-    .message.success {
-      color: var(--green);
-    }
-
-    .app {
-      min-height: 100vh;
-    }
-
-    .topbar {
-      height: 65px;
-      padding: 0 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg);
-    }
-
-    .wordmark {
-      font-size: 21px;
-      font-weight: 600;
-      letter-spacing: -0.8px;
-    }
-
-    .topbar-right {
-      display: flex;
-      align-items: center;
-      gap: 13px;
-      min-width: 0;
-    }
-
-    .current-user {
-      max-width: 220px;
-      overflow: hidden;
-      color: var(--muted);
-      font-size: 13px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .workspace {
-      width: 100%;
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 38px 28px;
-    }
-
-    .page-heading {
-      margin-bottom: 25px;
-    }
-
-    .page-heading h1 {
-      margin-bottom: 7px;
-      text-align: left;
-      font-size: 28px;
-    }
-
-    .page-heading p {
-      color: var(--muted);
-      font-size: 14px;
-      font-weight: 400;
-    }
-
-    .columns {
-      display: grid;
-      grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-      gap: 20px;
-      align-items: start;
-    }
-
-    .panel {
-      min-width: 0;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: 7px;
-      background: var(--panel);
-    }
-
-    .panel-header {
-      min-height: 60px;
-      padding: 17px 19px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .panel-header h2 {
-      font-size: 15px;
-      font-weight: 500;
-    }
-
-    .count {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 400;
-    }
-
-    .panel-body {
-      padding: 19px;
-    }
-
-    .search-row {
-      display: flex;
-      gap: 9px;
-    }
-
-    .search-row input {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .search-row .primary {
-      width: auto;
-      min-height: 47px;
-    }
-
-    .section-label {
-      margin: 25px 0 12px;
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.7px;
-      text-transform: uppercase;
-    }
-
-    .section-label:first-child {
-      margin-top: 0;
-    }
-
-    .list {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .list-item {
-      min-width: 0;
-      padding: 13px 0;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 1px solid #242424;
-    }
-
-    .list-item:last-child {
-      border-bottom: none;
-    }
-
-    .avatar {
-      width: 39px;
-      height: 39px;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid #303030;
-      border-radius: 50%;
-      background: #1b1b1b;
-      color: var(--blue);
-      font-size: 15px;
-      font-weight: 500;
-    }
-
-    .person {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .person-name {
-      overflow: hidden;
-      font-size: 13px;
-      font-weight: 500;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .person-detail {
-      margin-top: 4px;
-      overflow: hidden;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 400;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .item-actions {
-      display: flex;
-      flex-shrink: 0;
-      align-items: center;
-      gap: 7px;
-    }
-
-    .accept {
-      min-height: 33px;
-      padding: 0 11px;
-      border: 1px solid var(--blue);
-      border-radius: 5px;
-      background: var(--blue);
-      color: #061114;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .reject {
-      min-height: 33px;
-      padding: 0 10px;
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      background: transparent;
-      color: #c5c5c5;
-      font-size: 12px;
-    }
-
-    .empty {
-      padding: 22px 0;
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 400;
-      line-height: 1.6;
-    }
-
-    .search-result {
-      margin-top: 15px;
-    }
-
-    .status-note {
-      margin-top: 10px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 400;
-      line-height: 1.5;
-    }
-
-    .divider {
-      height: 1px;
-      margin: 23px 0;
-      background: var(--border);
-    }
-
-    @media (max-width: 760px) {
-      .topbar {
-        padding: 0 17px;
-      }
-
-      .workspace {
-        padding: 27px 16px;
-      }
-
-      .columns {
-        grid-template-columns: 1fr;
-      }
-
-      .current-user {
-        max-width: 115px;
-      }
-    }
-
-    @media (max-width: 380px) {
-      .panel-body {
-        padding: 14px;
-      }
-
-      .search-row {
-        flex-wrap: wrap;
-      }
-
-      .search-row .primary {
-        width: 100%;
-      }
-
-      .item-actions {
-        gap: 4px;
-      }
-
-      .accept, .reject {
-        padding: 0 7px;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation: none !important;
-        transition: none !important;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0c0c0c">
+<title>Celio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;--bg:#0c0c0c;--panel:#111;--border:#292929;--text:#f5f5f5;--muted:#929292;--blue:#00c8e8;--hover:#35d6ef;--input:#0e0e0e;--red:#f08c8c;--green:#70d7a3}
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:var(--bg);color:var(--text);font-family:"Google Sans",Arial,sans-serif;font-weight:500;-webkit-font-smoothing:antialiased}
+button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:3px}[hidden]{display:none!important}
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.auth{width:100%;max-width:390px}
+h1{font-size:29px;font-weight:500;letter-spacing:-.8px;margin-bottom:9px}.auth h1,.auth .subtitle{text-align:center}
+.subtitle{color:var(--muted);font-size:14px;font-weight:400;margin-bottom:32px}
+.field{margin-bottom:19px}label{display:block;margin-bottom:9px;color:#dedede;font-size:13px}
+input{width:100%;height:45px;padding:0 13px;border:1px solid var(--border);border-radius:5px;background:var(--input);color:var(--text);font-size:14px;font-weight:400;outline:none}
+input::placeholder{color:#686868}input:focus{border-color:var(--blue)}
+.input-wrap{position:relative}.input-wrap input{padding-right:65px}
+.show-password{position:absolute;right:0;top:0;height:45px;padding:0 13px;border:0;background:transparent;color:var(--muted);font-size:12px}
+.primary{min-height:42px;padding:0 15px;border:1px solid var(--blue);border-radius:5px;background:var(--blue);color:#061114;font-size:13px;font-weight:600}
+.primary:hover{background:var(--hover)}.primary:disabled{opacity:.6;cursor:wait}
+.full{width:100%;min-height:46px}.secondary{min-height:36px;padding:0 12px;border:1px solid var(--border);border-radius:5px;background:transparent;color:var(--text);font-size:13px}
+.secondary:hover,.back-button:hover{background:#1b1b1b}
+.text-button{padding:0;border:0;background:transparent;color:var(--blue);font-size:inherit}
+.switch{margin-top:17px;color:var(--muted);font-size:13px;font-weight:400;text-align:center}
+.message{min-height:18px;margin-top:12px;color:var(--red);font-size:12px;font-weight:400;line-height:1.5;overflow-wrap:anywhere}
+.message.success{color:var(--green)}
+.app{min-height:100vh}.topbar{height:65px;padding:0 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border)}
+.wordmark{font-size:21px;font-weight:600;letter-spacing:-.8px}.topbar-right{display:flex;align-items:center;gap:13px;min-width:0}
+.current-user{max-width:220px;overflow:hidden;color:var(--muted);font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.workspace{width:100%;max-width:1180px;margin:0 auto;padding:34px 28px}
+.page-heading{margin-bottom:25px}.page-heading h1{margin-bottom:7px;font-size:28px}.page-heading p{color:var(--muted);font-size:14px;font-weight:400}
+.columns{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:20px;align-items:start}
+.panel{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:7px;background:var(--panel)}
+.panel-header{min-height:58px;padding:16px 19px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border)}
+.panel-header h2{font-size:15px;font-weight:500}.panel-body{padding:19px}.count{color:var(--muted);font-size:12px;font-weight:400}
+.search-row{display:flex;gap:9px}.search-row input{flex:1;min-width:0}.search-row .primary{min-height:45px}
+.section-label{margin:25px 0 12px;color:var(--muted);font-size:11px;font-weight:500;letter-spacing:.7px;text-transform:uppercase}
+.section-label:first-child{margin-top:0}.list{display:flex;flex-direction:column}
+.list-item{min-width:0;padding:13px 0;display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424}
+.list-item:last-child{border-bottom:none}.avatar{width:39px;height:39px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid #303030;border-radius:50%;background:#1b1b1b;color:var(--blue);font-size:15px}
+.person{flex:1;min-width:0}.person-name{overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.person-detail{margin-top:4px;overflow:hidden;color:var(--muted);font-size:12px;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
+.item-actions{display:flex;flex-shrink:0;align-items:center;gap:7px}
+.accept{min-height:33px;padding:0 11px;border:1px solid var(--blue);border-radius:5px;background:var(--blue);color:#061114;font-size:12px;font-weight:600}
+.reject{min-height:33px;padding:0 10px;border:1px solid var(--border);border-radius:5px;background:transparent;color:#c5c5c5;font-size:12px}
+.empty{padding:20px 0;color:var(--muted);font-size:13px;font-weight:400;line-height:1.6}
+.search-result{margin-top:15px}.divider{height:1px;margin:23px 0;background:var(--border)}
+.back-button{min-height:35px;padding:0 11px;border:1px solid var(--border);border-radius:5px;background:transparent;color:var(--text);font-size:13px}
+.chat-panel{margin-top:22px}.chat-header{display:flex;align-items:center;gap:12px;min-width:0}
+.chat-title{min-width:0}.chat-title h2{overflow:hidden;font-size:15px;text-overflow:ellipsis;white-space:nowrap}
+.chat-title p{margin-top:4px;color:var(--muted);font-size:12px;font-weight:400}
+.messages{height:min(48vh,480px);min-height:260px;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+.chat-empty{margin:auto;color:var(--muted);font-size:13px;font-weight:400;text-align:center;line-height:1.6}
+.message-row{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;gap:5px}
+.message-row.mine{align-self:flex-end;align-items:flex-end}
+.bubble{padding:10px 13px;border:1px solid #303030;border-radius:10px;background:#1b1b1b;font-size:14px;font-weight:400;line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap}
+.message-row.mine .bubble{background:#073b45;border-color:#075362}
+.message-meta{color:var(--muted);font-size:10px;font-weight:400}
+.composer{padding:15px 18px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--border)}
+.composer input{flex:1;min-width:0}.composer button{min-width:72px}
+@media(max-width:760px){.topbar{padding:0 17px}.workspace{padding:25px 16px}.columns{grid-template-columns:1fr}.current-user{max-width:115px}.messages{height:45vh}}
+@media(max-width:380px){.panel-body{padding:14px}.search-row{flex-wrap:wrap}.search-row .primary{width:100%}.item-actions{gap:4px}.accept,.reject{padding:0 7px}.composer{padding:12px}.composer button{min-width:60px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
 </head>
-
 <body>
-  <main id="authArea" class="auth-wrap">
-    <div class="auth">
-      <section id="loginScreen">
-        <h1>Welcome back</h1>
-        <p class="subtitle">Sign in to your account</p>
-
-        <form id="loginForm">
-          <div class="field">
-            <label for="loginEmail">Email address</label>
-            <input id="loginEmail" type="email" placeholder="Enter your email"
-              autocomplete="email" autocapitalize="none" required>
-          </div>
-
-          <div class="field">
-            <label for="loginPassword">Password</label>
-            <div class="input-wrap">
-              <input id="loginPassword" type="password"
-                placeholder="Enter your password" autocomplete="current-password" required>
-              <button class="show-password" type="button"
-                data-password="loginPassword">Show</button>
-            </div>
-          </div>
-
-          <button class="primary" id="loginButton" type="submit">Log in</button>
-          <p class="message" id="loginMessage" role="status" aria-live="polite"></p>
-        </form>
-
-        <p class="switch">
-          Don't have an account?
-          <button class="text-button" type="button" id="openSignup">Create account</button>
-        </p>
-      </section>
-
-      <section id="signupScreen" hidden>
-        <h1>Create account</h1>
-        <p class="subtitle">Get started with Celio</p>
-
-        <form id="signupForm">
-          <div class="field">
-            <label for="signupUsername">Username</label>
-            <input id="signupUsername" type="text"
-              placeholder="Choose a username" autocomplete="nickname"
-              minlength="3" maxlength="24" required>
-          </div>
-
-          <div class="field">
-            <label for="signupEmail">Email address</label>
-            <input id="signupEmail" type="email" placeholder="Enter your email"
-              autocomplete="email" autocapitalize="none" required>
-          </div>
-
-          <div class="field">
-            <label for="signupPassword">Password</label>
-            <div class="input-wrap">
-              <input id="signupPassword" type="password"
-                placeholder="Create a password" autocomplete="new-password"
-                minlength="8" required>
-              <button class="show-password" type="button"
-                data-password="signupPassword">Show</button>
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="confirmPassword">Confirm password</label>
-            <input id="confirmPassword" type="password"
-              placeholder="Enter your password again"
-              autocomplete="new-password" minlength="8" required>
-          </div>
-
-          <button class="primary" id="signupButton" type="submit">Create account</button>
-          <p class="message" id="signupMessage" role="status" aria-live="polite"></p>
-        </form>
-
-        <p class="switch">
-          Already have an account?
-          <button class="text-button" type="button" id="openLogin">Log in</button>
-        </p>
-      </section>
-    </div>
-  </main>
-
-  <main id="appArea" class="app" hidden>
-    <header class="topbar">
-      <div class="wordmark">Celio</div>
-      <div class="topbar-right">
-        <span class="current-user" id="currentUsername"></span>
-        <button class="secondary" id="logoutButton" type="button">Log out</button>
-      </div>
-    </header>
-
-    <div class="workspace">
-      <div class="page-heading">
-        <h1>Friends</h1>
-        <p>Find people and connect with them on Celio.</p>
-      </div>
-
-      <div class="columns">
-        <section class="panel">
-          <div class="panel-header">
-            <h2>Find people</h2>
-          </div>
-
-          <div class="panel-body">
-            <form id="searchForm">
-              <label for="usernameSearch">Search by username</label>
-              <div class="search-row">
-                <input id="usernameSearch" type="text"
-                  placeholder="Enter a username" minlength="3"
-                  maxlength="24" autocomplete="off" required>
-                <button class="primary" id="searchButton" type="submit">Search</button>
-              </div>
-            </form>
-
-            <p class="message" id="searchMessage" role="status" aria-live="polite"></p>
-            <div id="searchResult" class="search-result"></div>
-
-            <div class="divider"></div>
-
-            <p class="section-label">Sent requests</p>
-            <div id="sentRequests" class="list">
-              <p class="empty">Loading requests...</p>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-header">
-            <h2>Your connections</h2>
-            <span class="count" id="friendCount">0 friends</span>
-          </div>
-
-          <div class="panel-body">
-            <p class="section-label">Friend requests</p>
-            <div id="incomingRequests" class="list">
-              <p class="empty">Loading requests...</p>
-            </div>
-
-            <div class="divider"></div>
-
-            <p class="section-label">Friends</p>
-            <div id="friendsList" class="list">
-              <p class="empty">Loading friends...</p>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <p class="message" id="appMessage" role="status" aria-live="polite"></p>
-    </div>
-  </main>
-
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyAoD77U3rLamAjvefmT06-ByrZHkBlK7qo",
-      authDomain: "celio-404aa.firebaseapp.com",
-      projectId: "celio-404aa",
-      storageBucket: "celio-404aa.firebasestorage.app",
-      messagingSenderId: "823841413279",
-      appId: "1:823841413279:web:efefaf2efac7dd9b026aaa",
-      measurementId: "G-QSZYPKK71J"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-
-    const $ = id => document.getElementById(id);
-
-    let currentUser = null;
-    let currentProfile = null;
-    let unsubscribeListeners = [];
-    let handlingUser = false;
-
-    function setMessage(element, message, success = false) {
-      element.textContent = message;
-      element.classList.toggle("success", success);
-    }
-
-    function setButtonLoading(button, loading, loadingText, originalText) {
-      button.disabled = loading;
-      button.textContent = loading ? loadingText : originalText;
-    }
-
-    function friendlyError(error) {
-      const errors = {
-        "auth/invalid-email": "Enter a valid email address.",
-        "auth/user-not-found": "No account was found with that email.",
-        "auth/wrong-password": "The email or password is incorrect.",
-        "auth/invalid-credential": "The email or password is incorrect.",
-        "auth/email-already-in-use": "An account already exists with that email.",
-        "auth/weak-password": "Choose a stronger password.",
-        "auth/too-many-requests": "Too many attempts. Try again later.",
-        "auth/network-request-failed": "Connection failed. Check your internet.",
-        "auth/operation-not-allowed": "Email sign-in is not enabled in Firebase.",
-        "auth/unauthorized-domain": "This website is not authorized in Firebase.",
-        "permission-denied": "Firestore blocked this action. Check your database rules."
-      };
-
-      return errors[error.code] || error.message || "Something went wrong. Please try again.";
-    }
-
-    function stopListeners() {
-      unsubscribeListeners.forEach(unsubscribe => unsubscribe());
-      unsubscribeListeners = [];
-    }
-
-    function showAuthScreen(screen) {
-      $("authArea").hidden = false;
-      $("appArea").hidden = true;
-      $("loginScreen").hidden = screen !== "login";
-      $("signupScreen").hidden = screen !== "signup";
-      $("loginMessage").textContent = "";
-      $("signupMessage").textContent = "";
-      document.title = screen === "login" ? "Login | Celio" : "Create account | Celio";
-    }
-
-    function showApp() {
-      $("authArea").hidden = true;
-      $("appArea").hidden = false;
-      document.title = "Friends | Celio";
-    }
-
-    document.querySelectorAll("[data-password]").forEach(button => {
-      button.addEventListener("click", () => {
-        const input = $(button.dataset.password);
-        const showing = input.type === "password";
-        input.type = showing ? "text" : "password";
-        button.textContent = showing ? "Hide" : "Show";
-        button.setAttribute("aria-pressed", String(showing));
-      });
-    });
-
-    $("openSignup").addEventListener("click", () => showAuthScreen("signup"));
-    $("openLogin").addEventListener("click", () => showAuthScreen("login"));
-
-    $("loginForm").addEventListener("submit", async event => {
-      event.preventDefault();
-
-      if (!$("loginForm").reportValidity()) return;
-
-      const button = $("loginButton");
-      setMessage($("loginMessage"), "");
-      setButtonLoading(button, true, "Signing in...", "Log in");
-
-      try {
-        await auth.signInWithEmailAndPassword(
-          $("loginEmail").value.trim(),
-          $("loginPassword").value
-        );
-      } catch (error) {
-        setMessage($("loginMessage"), friendlyError(error));
-      } finally {
-        setButtonLoading(button, false, "", "Log in");
-      }
-    });
-
-    $("signupForm").addEventListener("submit", async event => {
-      event.preventDefault();
-
-      if (!$("signupForm").reportValidity()) return;
-
-      const username = $("signupUsername").value.trim();
-      const email = $("signupEmail").value.trim();
-      const password = $("signupPassword").value;
-      const confirmPassword = $("confirmPassword").value;
-
-      if (username.length < 3) {
-        setMessage($("signupMessage"), "Your username must be at least 3 characters.");
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        setMessage($("signupMessage"), "Passwords do not match.");
-        return;
-      }
-
-      const button = $("signupButton");
-      setMessage($("signupMessage"), "");
-      setButtonLoading(button, true, "Creating account...", "Create account");
-
-      try {
-        const credential = await auth.createUserWithEmailAndPassword(email, password);
-        await credential.user.updateProfile({ displayName: username });
-      } catch (error) {
-        setMessage($("signupMessage"), friendlyError(error));
-      } finally {
-        setButtonLoading(button, false, "", "Create account");
-      }
-    });
-
-    $("logoutButton").addEventListener("click", async () => {
-      $("logoutButton").disabled = true;
-
-      try {
-        await auth.signOut();
-      } catch (error) {
-        setMessage($("appMessage"), friendlyError(error));
-      } finally {
-        $("logoutButton").disabled = false;
-      }
-    });
-
-    async function saveUserProfile(user) {
-      const profileRef = db.collection("users").doc(user.uid);
-      const snapshot = await profileRef.get();
-      const oldProfile = snapshot.exists ? snapshot.data() : {};
-
-      const username =
-        user.displayName ||
-        oldProfile.username ||
-        (user.email ? user.email.split("@")[0] : "User");
-
-      const profile = {
-        uid: user.uid,
-        username: username,
-        usernameLower: username.toLowerCase(),
-        email: user.email || "",
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-
-      if (!snapshot.exists) {
-        profile.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-      }
-
-      await profileRef.set(profile, { merge: true });
-      return { ...oldProfile, ...profile, username, uid: user.uid, email: user.email || "" };
-    }
-
-    function makeAvatar(name) {
-      return (name || "?").trim().charAt(0).toUpperCase() || "?";
-    }
-
-    function makePerson(name, detail) {
-      const item = document.createElement("div");
-      item.className = "list-item";
-
-      const avatar = document.createElement("div");
-      avatar.className = "avatar";
-      avatar.textContent = makeAvatar(name);
-
-      const person = document.createElement("div");
-      person.className = "person";
-
-      const personName = document.createElement("div");
-      personName.className = "person-name";
-      personName.textContent = name || "Unknown user";
-
-      const personDetail = document.createElement("div");
-      personDetail.className = "person-detail";
-      personDetail.textContent = detail || "";
-
-      person.append(personName, personDetail);
-      item.append(avatar, person);
-      return { item, person, personName, personDetail };
-    }
-
-    function makeEmpty(container, message) {
-      container.replaceChildren();
-      const empty = document.createElement("p");
-      empty.className = "empty";
-      empty.textContent = message;
-      container.appendChild(empty);
-    }
-
-    async function addContactIfMissing(friendId, username) {
-      if (!currentUser || !friendId || friendId === currentUser.uid) return;
-
-      const contactRef = db
-        .collection("friends")
-        .doc(currentUser.uid)
-        .collection("contacts")
-        .doc(friendId);
-
-      const snapshot = await contactRef.get();
-
-      if (!snapshot.exists) {
-        await contactRef.set({
-          uid: friendId,
-          username: username || "User",
-          addedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-      }
-    }
-
-    async function sendFriendRequest(target) {
-      const existingContacts = await db
-        .collection("friends")
-        .doc(currentUser.uid)
-        .collection("contacts")
-        .doc(target.uid)
-        .get();
-
-      if (existingContacts.exists) {
-        setMessage($("searchMessage"), "You're already friends with this user.");
-        return;
-      }
-
-      const sentSnapshot = await db.collection("friendRequests")
-        .where("senderId", "==", currentUser.uid)
-        .get();
-
-      const existingSent = sentSnapshot.docs.find(doc =>
-        doc.data().receiverId === target.uid &&
-        ["pending", "accepted"].includes(doc.data().status)
-      );
-
-      if (existingSent) {
-        setMessage(
-          $("searchMessage"),
-          existingSent.data().status === "accepted"
-            ? "This request has already been accepted."
-            : "You've already sent this person a request."
-        );
-        return;
-      }
-
-      const receivedSnapshot = await db.collection("friendRequests")
-        .where("receiverId", "==", currentUser.uid)
-        .get();
-
-      const incoming = receivedSnapshot.docs.find(doc =>
-        doc.data().senderId === target.uid &&
-        doc.data().status === "pending"
-      );
-
-      if (incoming) {
-        setMessage($("searchMessage"), "This person already sent you a request. Accept it in Friend requests.");
-        return;
-      }
-
-      await db.collection("friendRequests").add({
-        senderId: currentUser.uid,
-        receiverId: target.uid,
-        senderUsername: currentProfile.username,
-        receiverUsername: target.username,
-        status: "pending",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-
-      setMessage($("searchMessage"), "Friend request sent.", true);
-      $("searchResult").replaceChildren();
-    }
-
-    $("searchForm").addEventListener("submit", async event => {
-      event.preventDefault();
-
-      const username = $("usernameSearch").value.trim();
-      if (username.length < 3) {
-        setMessage($("searchMessage"), "Enter at least 3 characters.");
-        return;
-      }
-
-      const button = $("searchButton");
-      setButtonLoading(button, true, "Searching...", "Search");
-      setMessage($("searchMessage"), "");
-      $("searchResult").replaceChildren();
-
-      try {
-        const results = await db.collection("users")
-          .where("usernameLower", "==", username.toLowerCase())
-          .limit(10)
-          .get();
-
-        const users = results.docs
-          .map(doc => ({ ...doc.data(), uid: doc.id }))
-          .filter(user => user.uid !== currentUser.uid);
-
-        if (users.length === 0) {
-          setMessage($("searchMessage"), "No user found. Check the username and try again.");
-          return;
-        }
-
-        users.forEach(user => {
-          const row = makePerson(user.username, "Celio user");
-          const addButton = document.createElement("button");
-          addButton.className = "accept";
-          addButton.textContent = "Add friend";
-
-          addButton.addEventListener("click", async () => {
-            addButton.disabled = true;
-            addButton.textContent = "Sending...";
-
-            try {
-              await sendFriendRequest(user);
-            } catch (error) {
-              setMessage($("searchMessage"), friendlyError(error));
-              addButton.disabled = false;
-              addButton.textContent = "Add friend";
-            }
-          });
-
-          const actions = document.createElement("div");
-          actions.className = "item-actions";
-          actions.appendChild(addButton);
-          row.item.appendChild(actions);
-          $("searchResult").appendChild(row.item);
-        });
-      } catch (error) {
-        setMessage($("searchMessage"), friendlyError(error));
-      } finally {
-        setButtonLoading(button, false, "", "Search");
-      }
-    });
-
-    function startFriendsListeners() {
-      stopListeners();
-
-      const incomingQuery = db.collection("friendRequests")
-        .where("receiverId", "==", currentUser.uid);
-
-      unsubscribeListeners.push(incomingQuery.onSnapshot(snapshot => {
-        const requests = snapshot.docs
-          .filter(doc => doc.data().status === "pending");
-
-        makeEmpty($("incomingRequests"), requests.length
-          ? "" : "No pending friend requests.");
-
-        if (requests.length) {
-          $("incomingRequests").replaceChildren();
-
-          requests.forEach(documentSnapshot => {
-            const request = documentSnapshot.data();
-            const row = makePerson(request.senderUsername || "Celio user", "Wants to be your friend");
-
-            const actions = document.createElement("div");
-            actions.className = "item-actions";
-
-            const acceptButton = document.createElement("button");
-            acceptButton.className = "accept";
-            acceptButton.textContent = "Accept";
-
-            const rejectButton = document.createElement("button");
-            rejectButton.className = "reject";
-            rejectButton.textContent = "Reject";
-
-            acceptButton.addEventListener("click", async () => {
-              acceptButton.disabled = true;
-              rejectButton.disabled = true;
-
-              try {
-                await documentSnapshot.ref.update({ status: "accepted" });
-
-                await addContactIfMissing(
-                  request.senderId,
-                  request.senderUsername || "User"
-                );
-
-                setMessage($("appMessage"), "Friend request accepted.", true);
-              } catch (error) {
-                setMessage($("appMessage"), friendlyError(error));
-                acceptButton.disabled = false;
-                rejectButton.disabled = false;
-              }
-            });
-
-            rejectButton.addEventListener("click", async () => {
-              acceptButton.disabled = true;
-              rejectButton.disabled = true;
-
-              try {
-                await documentSnapshot.ref.update({ status: "rejected" });
-                setMessage($("appMessage"), "Friend request rejected.", true);
-              } catch (error) {
-                setMessage($("appMessage"), friendlyError(error));
-                acceptButton.disabled = false;
-                rejectButton.disabled = false;
-              }
-            });
-
-            actions.append(acceptButton, rejectButton);
-            row.item.appendChild(actions);
-            $("incomingRequests").appendChild(row.item);
-          });
-        }
-      }, error => {
-        setMessage($("appMessage"), "Couldn't load incoming requests: " + friendlyError(error));
-      }));
-
-      const outgoingQuery = db.collection("friendRequests")
-        .where("senderId", "==", currentUser.uid);
-
-      unsubscribeListeners.push(outgoingQuery.onSnapshot(async snapshot => {
-        const requests = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        const pending = requests.filter(request => request.status === "pending");
-
-        if (!pending.length) {
-          makeEmpty($("sentRequests"), "No outgoing requests.");
-        } else {
-          $("sentRequests").replaceChildren();
-
-          pending.forEach(request => {
-            const row = makePerson(
-              request.receiverUsername || "Celio user",
-              "Request pending"
-            );
-
-            const status = document.createElement("span");
-            status.className = "count";
-            status.textContent = "Pending";
-            row.item.appendChild(status);
-            $("sentRequests").appendChild(row.item);
-          });
-        }
-
-        for (const request of requests.filter(item => item.status === "accepted")) {
-          try {
-            await addContactIfMissing(
-              request.receiverId,
-              request.receiverUsername || "User"
-            );
-          } catch (error) {
-            console.error("Could not sync accepted friend:", error);
-          }
-        }
-      }, error => {
-        setMessage($("appMessage"), "Couldn't load sent requests: " + friendlyError(error));
-      }));
-
-      const contactsQuery = db.collection("friends")
-        .doc(currentUser.uid)
-        .collection("contacts");
-
-      unsubscribeListeners.push(contactsQuery.onSnapshot(snapshot => {
-        const contacts = snapshot.docs;
-
-        $("friendCount").textContent =
-          contacts.length + (contacts.length === 1 ? " friend" : " friends");
-
-        if (!contacts.length) {
-          makeEmpty($("friendsList"), "Your friends will appear here after you connect.");
-          return;
-        }
-
-        $("friendsList").replaceChildren();
-
-        contacts.forEach(documentSnapshot => {
-          const friend = documentSnapshot.data();
-          const row = makePerson(friend.username || "Celio user", "Friend");
-
-          const status = document.createElement("span");
-          status.className = "count";
-          status.textContent = "Connected";
-
-          row.item.appendChild(status);
-          $("friendsList").appendChild(row.item);
-        });
-      }, error => {
-        setMessage($("appMessage"), "Couldn't load friends: " + friendlyError(error));
-      }));
-    }
-
-    auth.onAuthStateChanged(async user => {
-      stopListeners();
-      currentUser = user;
-
-      if (!user) {
-        currentProfile = null;
-        showAuthScreen("login");
-        return;
-      }
-
-      if (handlingUser) return;
-      handlingUser = true;
-
-      try {
-        currentProfile = await saveUserProfile(user);
-        $("currentUsername").textContent = currentProfile.username;
-        showApp();
-        setMessage($("appMessage"), "");
-        startFriendsListeners();
-      } catch (error) {
-        showApp();
-        setMessage(
-          $("appMessage"),
-          "You're signed in, but your profile couldn't be loaded: " + friendlyError(error)
-        );
-      } finally {
-        handlingUser = false;
-      }
-    });
-  </script>
+<main id="authArea" class="auth-wrap">
+<div class="auth">
+<section id="loginScreen">
+<h1>Welcome back</h1><p class="subtitle">Sign in to your account</p>
+<form id="loginForm">
+<div class="field"><label for="loginEmail">Email address</label><input id="loginEmail" type="email" placeholder="Enter your email" autocomplete="email" required></div>
+<div class="field"><label for="loginPassword">Password</label><div class="input-wrap"><input id="loginPassword" type="password" placeholder="Enter your password" autocomplete="current-password" required><button class="show-password" type="button" data-password="loginPassword">Show</button></div></div>
+<button class="primary full" id="loginButton">Log in</button><p class="message" id="loginMessage" role="status"></p>
+</form>
+<p class="switch">Don't have an account? <button class="text-button" id="openSignup" type="button">Create account</button></p>
+</section>
+<section id="signupScreen" hidden>
+<h1>Create account</h1><p class="subtitle">Get started with Celio</p>
+<form id="signupForm">
+<div class="field"><label for="signupUsername">Username</label><input id="signupUsername" minlength="3" maxlength="24" placeholder="Choose a username" required></div>
+<div class="field"><label for="signupEmail">Email address</label><input id="signupEmail" type="email" placeholder="Enter your email" autocomplete="email" required></div>
+<div class="field"><label for="signupPassword">Password</label><div class="input-wrap"><input id="signupPassword" type="password" minlength="8" placeholder="Create a password" required><button class="show-password" type="button" data-password="signupPassword">Show</button></div></div>
+<div class="field"><label for="confirmPassword">Confirm password</label><input id="confirmPassword" type="password" minlength="8" placeholder="Enter your password again" required></div>
+<button class="primary full" id="signupButton">Create account</button><p class="message" id="signupMessage" role="status"></p>
+</form>
+<p class="switch">Already have an account? <button class="text-button" id="openLogin" type="button">Log in</button></p>
+</section>
+</div>
+</main>
+
+<main id="appArea" class="app" hidden>
+<header class="topbar"><div class="wordmark">Celio</div><div class="topbar-right"><span id="currentUsername" class="current-user"></span><button id="logoutButton" class="secondary">Log out</button></div></header>
+<div class="workspace">
+<div id="friendsPage">
+<div class="page-heading"><h1>Friends</h1><p>Find people and connect with them on Celio.</p></div>
+<div class="columns">
+<section class="panel"><div class="panel-header"><h2>Find people</h2></div><div class="panel-body">
+<form id="searchForm"><label for="usernameSearch">Search by username</label><div class="search-row"><input id="usernameSearch" minlength="3" maxlength="24" placeholder="Enter a username" required><button id="searchButton" class="primary">Search</button></div></form>
+<p id="searchMessage" class="message" role="status"></p><div id="searchResult" class="search-result"></div>
+<div class="divider"></div><p class="section-label">Sent requests</p><div id="sentRequests" class="list"><p class="empty">Loading requests...</p></div>
+</div></section>
+<section class="panel"><div class="panel-header"><h2>Your connections</h2><span id="friendCount" class="count">0 friends</span></div><div class="panel-body">
+<p class="section-label">Friend requests</p><div id="incomingRequests" class="list"><p class="empty">Loading requests...</p></div>
+<div class="divider"></div><p class="section-label">Friends</p><div id="friendsList" class="list"><p class="empty">Loading friends...</p></div>
+</div></section>
+</div>
+</div>
+
+<section id="chatPanel" class="panel chat-panel" hidden>
+<div class="panel-header">
+<div class="chat-header"><button id="backButton" class="back-button">Back</button><div class="chat-title"><h2 id="chatName">Conversation</h2><p>Direct message</p></div></div>
+</div>
+<div id="messages" class="messages" aria-live="polite"><p class="chat-empty">Loading messages...</p></div>
+<form id="messageForm" class="composer"><input id="messageInput" maxlength="4000" placeholder="Write a message..." autocomplete="off" aria-label="Message" required><button id="sendButton" class="primary" type="submit">Send</button></form>
+<p id="chatMessage" class="message" style="padding:0 18px 12px;margin-top:0" role="status"></p>
+</section>
+<p id="appMessage" class="message" role="status"></p>
+</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig={
+ apiKey:"AIzaSyAoD77U3rLamAjvefmT06-ByRZhKblK7qo",
+ authDomain:"celio-404aa.firebaseapp.com",
+ projectId:"celio-404aa",
+ storageBucket:"celio-404aa.firebasestorage.app",
+ messagingSenderId:"823841413279",
+ appId:"1:823841413279:web:efefaf2efac7dd9b026aaa",
+ measurementId:"G-QSZYPKK71J"
+};
+firebase.initializeApp(firebaseConfig);
+const auth=firebase.auth(),db=firebase.firestore();
+const $=id=>document.getElementById(id);
+let currentUser=null,currentProfile=null,unsubscribeListeners=[],messageListener=null,activeChatId=null,activeFriend=null,handlingUser=false;
+
+function setMessage(el,msg,success=false){el.textContent=msg;el.classList.toggle("success",success)}
+function loading(button,on,wait,normal){button.disabled=on;button.textContent=on?wait:normal}
+function errorText(e){
+ const errors={
+ "auth/invalid-email":"Enter a valid email address.","auth/user-not-found":"No account was found with that email.",
+ "auth/wrong-password":"The email or password is incorrect.","auth/invalid-credential":"The email or password is incorrect.",
+ "auth/email-already-in-use":"An account already exists with that email.","auth/weak-password":"Choose a stronger password.",
+ "auth/too-many-requests":"Too many attempts. Try again later.","auth/network-request-failed":"Connection failed. Check your internet.",
+ "auth/operation-not-allowed":"Email sign-in is not enabled in Firebase.","auth/unauthorized-domain":"This website is not authorized in Firebase.",
+ "permission-denied":"Firestore blocked this action. Check your database rules."
+ };
+ return errors[e.code]||e.message||"Something went wrong. Please try again.";
+}
+function stopListeners(){unsubscribeListeners.forEach(fn=>fn());unsubscribeListeners=[];if(messageListener){messageListener();messageListener=null}}
+function showAuth(screen){$("authArea").hidden=false;$("appArea").hidden=true;$("loginScreen").hidden=screen!=="login";$("signupScreen").hidden=screen!=="signup";$("loginMessage").textContent="";$("signupMessage").textContent="";document.title=screen==="login"?"Login | Celio":"Create account | Celio"}
+function showApp(){$("authArea").hidden=true;$("appArea").hidden=false;document.title="Celio"}
+function makeAvatar(name){return(name||"?").trim().charAt(0).toUpperCase()||"?"}
+function makePerson(name,detail){
+ const item=document.createElement("div");item.className="list-item";
+ const avatar=document.createElement("div");avatar.className="avatar";avatar.textContent=makeAvatar(name);
+ const person=document.createElement("div");person.className="person";
+ const personName=document.createElement("div");personName.className="person-name";personName.textContent=name||"Unknown user";
+ const personDetail=document.createElement("div");personDetail.className="person-detail";personDetail.textContent=detail||"";
+ person.append(personName,personDetail);item.append(avatar,person);return{item,person,personName,personDetail};
+}
+function makeEmpty(container,message){container.replaceChildren();const p=document.createElement("p");p.className="empty";p.textContent=message;container.append(p)}
+document.querySelectorAll("[data-password]").forEach(button=>button.addEventListener("click",()=>{const input=$(button.dataset.password),showing=input.type==="password";input.type=showing?"text":"password";button.textContent=showing?"Hide":"Show"}));
+$("openSignup").onclick=()=>showAuth("signup");$("openLogin").onclick=()=>showAuth("login");
+
+$("loginForm").addEventListener("submit",async e=>{
+ e.preventDefault();const b=$("loginButton");setMessage($("loginMessage"),"");loading(b,true,"Signing in...","Log in");
+ try{await auth.signInWithEmailAndPassword($("loginEmail").value.trim(),$("loginPassword").value)}
+ catch(err){setMessage($("loginMessage"),errorText(err))}
+ finally{loading(b,false,"","Log in")}
+});
+$("signupForm").addEventListener("submit",async e=>{
+ e.preventDefault();const username=$("signupUsername").value.trim(),email=$("signupEmail").value.trim(),password=$("signupPassword").value;
+ if(password!==$("confirmPassword").value){setMessage($("signupMessage"),"Passwords do not match.");return}
+ const b=$("signupButton");loading(b,true,"Creating account...","Create account");
+ try{const cred=await auth.createUserWithEmailAndPassword(email,password);await cred.user.updateProfile({displayName:username})}
+ catch(err){setMessage($("signupMessage"),errorText(err))}
+ finally{loading(b,false,"","Create account")}
+});
+$("logoutButton").onclick=()=>auth.signOut().catch(e=>setMessage($("appMessage"),errorText(e)));
+async function saveUserProfile(user){
+ const ref=db.collection("users").doc(user.uid),snap=await ref.get(),old=snap.exists?snap.data():{};
+ const username=user.displayName||old.username||(user.email?user.email.split("@")[0]:"User");
+ const profile={uid:user.uid,username,usernameLower:username.toLowerCase(),email:user.email||"",updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+ if(!snap.exists)profile.createdAt=firebase.firestore.FieldValue.serverTimestamp();
+ await ref.set(profile,{merge:true});return{...old,...profile,username,uid:user.uid,email:user.email||""};
+}
+async function addContactIfMissing(friendId,username){
+ if(!currentUser||!friendId||friendId===currentUser.uid)return;
+ const ref=db.collection("friends").doc(currentUser.uid).collection("contacts").doc(friendId);
+ const snap=await ref.get();if(!snap.exists)await ref.set({uid:friendId,username:username||"User",addedAt:firebase.firestore.FieldValue.serverTimestamp()});
+}
+async function sendFriendRequest(target){
+ const contact=await db.collection("friends").doc(currentUser.uid).collection("contacts").doc(target.uid).get();
+ if(contact.exists){setMessage($("searchMessage"),"You're already friends with this user.");return}
+ const sent=await db.collection("friendRequests").where("senderId","==",currentUser.uid).get();
+ const existing=sent.docs.find(d=>d.data().receiverId===target.uid&&["pending","accepted"].includes(d.data().status));
+ if(existing){setMessage($("searchMessage"),existing.data().status==="accepted"?"This request has already been accepted.":"You've already sent this person a request.");return}
+ const received=await db.collection("friendRequests").where("receiverId","==",currentUser.uid).get();
+ if(received.docs.some(d=>d.data().senderId===target.uid&&d.data().status==="pending")){setMessage($("searchMessage"),"This person already sent you a request. Accept it in Friend requests.");return}
+ await db.collection("friendRequests").add({senderId:currentUser.uid,receiverId:target.uid,senderUsername:currentProfile.username,receiverUsername:target.username,status:"pending",createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+ setMessage($("searchMessage"),"Friend request sent.",true);$("searchResult").replaceChildren();
+}
+$("searchForm").addEventListener("submit",async e=>{
+ e.preventDefault();const username=$("usernameSearch").value.trim();if(username.length<3)return;
+ const b=$("searchButton");loading(b,true,"Searching...","Search");setMessage($("searchMessage"),"");$("searchResult").replaceChildren();
+ try{
+  const result=await db.collection("users").where("usernameLower","==",username.toLowerCase()).limit(10).get();
+  const users=result.docs.map(d=>({...d.data(),uid:d.id})).filter(u=>u.uid!==currentUser.uid);
+  if(!users.length){setMessage($("searchMessage"),"No user found. Check the username and try again.");return}
+  users.forEach(user=>{
+   const row=makePerson(user.username,"Celio user"),button=document.createElement("button");button.className="accept";button.textContent="Add friend";
+   button.onclick=async()=>{loading(button,true,"Sending...","Add friend");try{await sendFriendRequest(user)}catch(err){setMessage($("searchMessage"),errorText(err));loading(button,false,"","Add friend")}};
+   const actions=document.createElement("div");actions.className="item-actions";actions.append(button);row.item.append(actions);$("searchResult").append(row.item);
+  });
+ }catch(err){setMessage($("searchMessage"),errorText(err))}finally{loading(b,false,"","Search")}
+});
+
+function startFriendsListeners(){
+ stopListeners();
+ unsubscribeListeners.push(db.collection("friendRequests").where("receiverId","==",currentUser.uid).onSnapshot(snapshot=>{
+  const requests=snapshot.docs.filter(d=>d.data().status==="pending");makeEmpty($("incomingRequests"),"No pending friend requests.");
+  if(!requests.length)return;$("incomingRequests").replaceChildren();
+  requests.forEach(ds=>{
+   const r=ds.data(),row=makePerson(r.senderUsername||"Celio user","Wants to be your friend"),actions=document.createElement("div");actions.className="item-actions";
+   const accept=document.createElement("button"),reject=document.createElement("button");accept.className="accept";accept.textContent="Accept";reject.className="reject";reject.textContent="Reject";
+   accept.onclick=async()=>{accept.disabled=reject.disabled=true;try{await ds.ref.update({status:"accepted"});await addContactIfMissing(r.senderId,r.senderUsername);setMessage($("appMessage"),"Friend request accepted.",true)}catch(err){setMessage($("appMessage"),errorText(err));accept.disabled=reject.disabled=false}};
+   reject.onclick=async()=>{accept.disabled=reject.disabled=true;try{await ds.ref.update({status:"rejected"})}catch(err){setMessage($("appMessage"),errorText(err));accept.disabled=reject.disabled=false}};
+   actions.append(accept,reject);row.item.append(actions);$("incomingRequests").append(row.item);
+  });
+ },err=>setMessage($("appMessage"),errorText(err))));
+
+ unsubscribeListeners.push(db.collection("friendRequests").where("senderId","==",currentUser.uid).onSnapshot(async snapshot=>{
+  const requests=snapshot.docs.map(d=>({id:d.id,...d.data()})),pending=requests.filter(r=>r.status==="pending");
+  if(!pending.length)makeEmpty($("sentRequests"),"No outgoing requests.");else{
+   $("sentRequests").replaceChildren();pending.forEach(r=>{const row=makePerson(r.receiverUsername||"Celio user","Request pending");const status=document.createElement("span");status.className="count";status.textContent="Pending";row.item.append(status);$("sentRequests").append(row.item)});
+  }
+  for(const r of requests.filter(r=>r.status==="accepted")){try{await addContactIfMissing(r.receiverId,r.receiverUsername)}catch(err){console.error(err)}}
+ },err=>setMessage($("appMessage"),errorText(err))));
+
+ unsubscribeListeners.push(db.collection("friends").doc(currentUser.uid).collection("contacts").onSnapshot(snapshot=>{
+  const contacts=snapshot.docs;$("friendCount").textContent=contacts.length+(contacts.length===1?" friend":" friends");
+  if(!contacts.length){makeEmpty($("friendsList"),"Your friends will appear here after you connect.");return}
+  $("friendsList").replaceChildren();
+  contacts.forEach(ds=>{
+   const friend=ds.data(),row=makePerson(friend.username||"Celio user","Friend"),button=document.createElement("button");
+   button.className="accept";button.textContent="Message";
+   button.onclick=()=>openChat(ds.id,friend.username||"Celio user");
+   const actions=document.createElement("div");actions.className="item-actions";actions.append(button);row.item.append(actions);$("friendsList").append(row.item);
+  });
+ },err=>setMessage($("appMessage"),errorText(err))));
+}
+
+function chatIdFor(a,b){return[a,b].sort().join("_")}
+async function openChat(friendId,friendName){
+ if(!currentUser||friendId===currentUser.uid)return;
+ setMessage($("chatMessage"),"");$("chatName").textContent=friendName;
+ $("friendsPage").hidden=true;$("chatPanel").hidden=false;
+ $("messages").replaceChildren();makeEmpty($("messages"),"Opening conversation...");
+ activeFriend={uid:friendId,username:friendName};activeChatId=chatIdFor(currentUser.uid,friendId);
+ if(messageListener){messageListener();messageListener=null}
+ try{
+  const myContact=db.collection("friends").doc(currentUser.uid).collection("contacts").doc(friendId);
+  const theirContact=db.collection("friends").doc(friendId).collection("contacts").doc(currentUser.uid);
+  const [mine,theirs]=await Promise.all([myContact.get(),theirContact.get()]);
+  if(!mine.exists||!theirs.exists){
+   makeEmpty($("messages"),"This conversation isn't available yet. Make sure both accounts show each other as friends.");
+   return;
+  }
+  const chatRef=db.collection("chats").doc(activeChatId),chat=await chatRef.get();
+  if(!chat.exists){
+   await chatRef.set({participants:[currentUser.uid,friendId].sort(),createdBy:currentUser.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  }else if(!Array.isArray(chat.data().participants)||!chat.data().participants.includes(currentUser.uid)||!chat.data().participants.includes(friendId)){
+   throw new Error("This conversation has invalid participants.");
+  }
+  if(activeChatId!==chatIdFor(currentUser.uid,friendId))return;
+  messageListener=chatRef.collection("messages").orderBy("createdAt","asc").limitToLast(100).onSnapshot(snapshot=>{
+   if(snapshot.empty){makeEmpty($("messages"),"No messages yet. Say hello.");return}
+   $("messages").replaceChildren();
+   snapshot.forEach(ds=>{
+    const m=ds.data(),row=document.createElement("div");row.className="message-row"+(m.senderId===currentUser.uid?" mine":"");
+    const bubble=document.createElement("div");bubble.className="bubble";bubble.textContent=m.text||"";
+    const meta=document.createElement("div");meta.className="message-meta";
+    const time=m.createdAt&&m.createdAt.toDate?m.createdAt.toDate().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"";
+    meta.textContent=(m.senderId===currentUser.uid?"You":m.senderUsername||friendName)+(time?" · "+time:"");
+    row.append(bubble,meta);$("messages").append(row);
+   });
+   $("messages").scrollTop=$("messages").scrollHeight;
+  },err=>{setMessage($("chatMessage"),errorText(err))});
+ }catch(err){
+  setMessage($("chatMessage"),"Couldn't open conversation: "+errorText(err));
+  makeEmpty($("messages"),"The conversation could not be opened.");
+ }
+}
+$("backButton").onclick=()=>{
+ if(messageListener){messageListener();messageListener=null}
+ activeChatId=null;activeFriend=null;$("chatPanel").hidden=true;$("friendsPage").hidden=false;setMessage($("chatMessage"),"");
+};
+$("messageForm").addEventListener("submit",async e=>{
+ e.preventDefault();const text=$("messageInput").value.trim();
+ if(!text||!activeChatId||!activeFriend)return;
+ const chatId=activeChatId,friend={...activeFriend},button=$("sendButton");
+ loading(button,true,"Sending...","Send");setMessage($("chatMessage"),"");
+ try{
+  const myContact=await db.collection("friends").doc(currentUser.uid).collection("contacts").doc(friend.uid).get();
+  const theirContact=await db.collection("friends").doc(friend.uid).collection("contacts").doc(currentUser.uid).get();
+  if(!myContact.exists||!theirContact.exists)throw new Error("You must both be connected as friends to message.");
+  const chatRef=db.collection("chats").doc(chatId),chat=await chatRef.get();
+  if(!chat.exists||!chat.data().participants.includes(currentUser.uid)||!chat.data().participants.includes(friend.uid))throw new Error("Conversation access could not be verified.");
+  await chatRef.collection("messages").add({senderId:currentUser.uid,senderUsername:currentProfile.username,text,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+  await chatRef.update({updatedAt:firebase.firestore.FieldValue.serverTimestamp(),lastMessage:text});
+  if(activeChatId===chatId)$("messageInput").value="";
+ }catch(err){setMessage($("chatMessage"),errorText(err))}
+ finally{loading(button,false,"","Send");$("messageInput").focus()}
+});
+auth.onAuthStateChanged(async user=>{
+ stopListeners();currentUser=user;
+ if(!user){currentProfile=null;activeChatId=null;activeFriend=null;showAuth("login");return}
+ if(handlingUser)return;handlingUser=true;
+ try{
+  currentProfile=await saveUserProfile(user);$("currentUsername").textContent=currentProfile.username;
+  showApp();$("friendsPage").hidden=false;$("chatPanel").hidden=true;setMessage($("appMessage"),"");startFriendsListeners();
+ }catch(err){showApp();setMessage($("appMessage"),"You're signed in, but your profile couldn't be loaded: "+errorText(err))}
+ finally{handlingUser=false}
+});
+</script>
 </body>
 </html>
