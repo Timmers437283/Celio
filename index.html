@@ -176,6 +176,7 @@
       font-size: 12px;
       font-weight: 400;
       text-align: center;
+      line-height: 1.5;
     }
 
     .switch {
@@ -229,13 +230,13 @@
 
       <form id="loginForm" autocomplete="on">
         <div class="field">
-          <label for="loginIdentifier">Username or email</label>
+          <label for="loginEmail">Email address</label>
           <input
-            id="loginIdentifier"
-            name="username"
-            type="text"
-            placeholder="Enter your username or email"
-            autocomplete="username"
+            id="loginEmail"
+            name="email"
+            type="email"
+            placeholder="Enter your email"
+            autocomplete="email"
             autocapitalize="none"
             spellcheck="false"
             required
@@ -258,7 +259,7 @@
           </div>
         </div>
 
-        <button class="primary-button" type="submit">Log in</button>
+        <button class="primary-button" id="loginButton" type="submit">Log in</button>
         <p class="message" id="loginMessage" role="status" aria-live="polite"></p>
       </form>
 
@@ -280,9 +281,7 @@
             name="username"
             type="text"
             placeholder="Choose a username"
-            autocomplete="username"
-            autocapitalize="none"
-            spellcheck="false"
+            autocomplete="nickname"
             minlength="3"
             maxlength="24"
             required
@@ -297,6 +296,8 @@
             type="email"
             placeholder="Enter your email"
             autocomplete="email"
+            autocapitalize="none"
+            spellcheck="false"
             required
           >
         </div>
@@ -331,7 +332,7 @@
           >
         </div>
 
-        <button class="primary-button" type="submit">Create account</button>
+        <button class="primary-button" id="signupButton" type="submit">Create account</button>
         <p class="message" id="signupMessage" role="status" aria-live="polite"></p>
       </form>
 
@@ -340,32 +341,75 @@
         <button class="text-button" type="button" id="openLogin">Log in</button>
       </p>
     </section>
+
+    <section id="accountScreen" hidden>
+      <h1 id="welcomeHeading">You're signed in</h1>
+      <p class="subtitle" id="accountEmail"></p>
+      <button class="primary-button" id="logoutButton" type="button">Log out</button>
+      <p class="message" id="accountMessage" role="status" aria-live="polite"></p>
+    </section>
   </main>
 
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+
   <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAoD77U3rLamAjvefmT06-ByrZHkBlK7qo",
+      authDomain: "celio-404aa.firebaseapp.com",
+      projectId: "celio-404aa",
+      storageBucket: "celio-404aa.firebasestorage.app",
+      messagingSenderId: "823841413279",
+      appId: "1:823841413279:web:efefaf2efac7dd9b026aaa",
+      measurementId: "G-QSZYPKK71J"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
     const loginScreen = document.getElementById("loginScreen");
     const signupScreen = document.getElementById("signupScreen");
+    const accountScreen = document.getElementById("accountScreen");
 
     const loginForm = document.getElementById("loginForm");
     const signupForm = document.getElementById("signupForm");
 
+    const loginButton = document.getElementById("loginButton");
+    const signupButton = document.getElementById("signupButton");
+    const logoutButton = document.getElementById("logoutButton");
+
     const loginMessage = document.getElementById("loginMessage");
     const signupMessage = document.getElementById("signupMessage");
+    const accountMessage = document.getElementById("accountMessage");
+
+    let requestedScreen = "login";
 
     function showScreen(screen) {
-      const showSignup = screen === "signup";
+      requestedScreen = screen;
 
-      loginScreen.hidden = showSignup;
-      signupScreen.hidden = !showSignup;
+      loginScreen.hidden = screen !== "login";
+      signupScreen.hidden = screen !== "signup";
+      accountScreen.hidden = screen !== "account";
 
       loginMessage.textContent = "";
       signupMessage.textContent = "";
+      accountMessage.textContent = "";
 
-      document.title = showSignup ? "Create account | Celio" : "Login | Celio";
+      const titles = {
+        login: "Login | Celio",
+        signup: "Create account | Celio",
+        account: "Account | Celio"
+      };
 
-      const heading = (showSignup ? signupScreen : loginScreen).querySelector("h1");
-      heading.setAttribute("tabindex", "-1");
-      heading.focus();
+      document.title = titles[screen];
+
+      const section = {
+        login: loginScreen,
+        signup: signupScreen,
+        account: accountScreen
+      }[screen];
+
+      section.querySelector("h1").focus?.();
     }
 
     document.getElementById("openSignup").addEventListener("click", () => {
@@ -387,31 +431,102 @@
       });
     });
 
-    loginForm.addEventListener("submit", event => {
+    function friendlyError(error) {
+      const errors = {
+        "auth/invalid-email": "Enter a valid email address.",
+        "auth/user-not-found": "No account was found with that email.",
+        "auth/wrong-password": "The email or password is incorrect.",
+        "auth/invalid-credential": "The email or password is incorrect.",
+        "auth/email-already-in-use": "An account already exists with that email.",
+        "auth/weak-password": "Choose a stronger password.",
+        "auth/too-many-requests": "Too many attempts. Please try again later.",
+        "auth/network-request-failed": "Connection failed. Check your internet.",
+        "auth/operation-not-allowed": "Email sign-in is not enabled in Firebase.",
+        "auth/unauthorized-domain": "This website is not authorized in Firebase."
+      };
+
+      return errors[error.code] || "Something went wrong. Please try again.";
+    }
+
+    function setLoading(button, loading, text) {
+      button.disabled = loading;
+      button.textContent = loading ? text : button.dataset.originalText;
+    }
+
+    loginButton.dataset.originalText = "Log in";
+    signupButton.dataset.originalText = "Create account";
+
+    loginForm.addEventListener("submit", async event => {
       event.preventDefault();
 
       if (!loginForm.reportValidity()) return;
 
-      loginMessage.style.color = "#929292";
-      loginMessage.textContent = "Login will work once Firebase is connected.";
+      loginMessage.style.color = "#f08c8c";
+      loginMessage.textContent = "";
+      setLoading(loginButton, true, "Signing in...");
+
+      const email = document.getElementById("loginEmail").value.trim();
+      const password = document.getElementById("loginPassword").value;
+
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        loginMessage.textContent = friendlyError(error);
+      } finally {
+        setLoading(loginButton, false);
+      }
     });
 
-    signupForm.addEventListener("submit", event => {
+    signupForm.addEventListener("submit", async event => {
       event.preventDefault();
 
       if (!signupForm.reportValidity()) return;
 
+      const username = document.getElementById("signupUsername").value.trim();
+      const email = document.getElementById("signupEmail").value.trim();
       const password = document.getElementById("signupPassword").value;
       const confirmPassword = document.getElementById("confirmPassword").value;
 
+      signupMessage.style.color = "#f08c8c";
+      signupMessage.textContent = "";
+
+      if (username.length < 3) {
+        signupMessage.textContent = "Your username must be at least 3 characters.";
+        return;
+      }
+
       if (password !== confirmPassword) {
-        signupMessage.style.color = "#f08c8c";
         signupMessage.textContent = "Passwords do not match.";
         return;
       }
 
-      signupMessage.style.color = "#929292";
-      signupMessage.textContent = "Account creation will work once Firebase is connected.";
+      setLoading(signupButton, true, "Creating account...");
+
+      try {
+        const credential = await auth.createUserWithEmailAndPassword(email, password);
+
+        await credential.user.updateProfile({
+          displayName: username
+        });
+      } catch (error) {
+        signupMessage.textContent = friendlyError(error);
+      } finally {
+        setLoading(signupButton, false);
+      }
+    });
+
+    logoutButton.addEventListener("click", async () => {
+      logoutButton.disabled = true;
+      logoutButton.textContent = "Logging out...";
+
+      try {
+        await auth.signOut();
+      } catch (error) {
+        accountMessage.textContent = friendlyError(error);
+      } finally {
+        logoutButton.disabled = false;
+        logoutButton.textContent = "Log out";
+      }
     });
 
     [loginForm, signupForm].forEach(form => {
@@ -419,6 +534,18 @@
         const message = form === loginForm ? loginMessage : signupMessage;
         message.textContent = "";
       });
+    });
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        document.getElementById("welcomeHeading").textContent =
+          "Welcome, " + (user.displayName || "there");
+
+        document.getElementById("accountEmail").textContent = user.email || "";
+        showScreen("account");
+      } else if (requestedScreen === "account") {
+        showScreen("login");
+      }
     });
   </script>
 </body>
