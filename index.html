@@ -32,7 +32,7 @@
       padding: 32px;
       background: #111318;
       border: 1px solid #262a33;
-      border-radius: 12px;
+      border-radius: 0;
     }
 
     h1 {
@@ -61,7 +61,7 @@
       height: 48px;
       padding: 0 14px;
       border: 1px solid #292d36;
-      border-radius: 8px;
+      border-radius: 0;
       outline: none;
       background: #0b0d12;
       color: #f5f6f8;
@@ -87,7 +87,7 @@
       height: 48px;
       margin-top: 2px;
       border: 0;
-      border-radius: 8px;
+      border-radius: 0;
       background: #0a84ff;
       color: #fff;
       font-size: 14px;
@@ -108,6 +108,7 @@
     .switch button {
       padding: 0;
       border: 0;
+      border-radius: 0;
       background: transparent;
       color: #0a84ff;
       font-size: inherit;
@@ -226,10 +227,10 @@
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      notice.textContent =
-        "Authentication isn't connected yet.";
+      notice.textContent = "Authentication isn't connected yet.";
       notice.hidden = false;
     });
   </script>
 </body>
 </html>
+
