@@ -31,9 +31,7 @@
       font-size: 14px;
     }
 
-    button, input {
-      font: inherit;
-    }
+    button, input { font: inherit; }
 
     button {
       cursor: pointer;
@@ -57,9 +55,7 @@
     }
 
     input:focus { border-color: var(--blue); }
-
     .hidden { display: none !important; }
-
     .muted { color: var(--muted); }
 
     .primary {
@@ -107,10 +103,7 @@
       padding: 24px;
     }
 
-    .auth-card {
-      width: 100%;
-      max-width: 360px;
-    }
+    .auth-card { width: 100%; max-width: 360px; }
 
     .brand {
       font-size: 30px;
@@ -139,11 +132,7 @@
     }
 
     .field label { color: #d0d0d0; }
-
-    .auth-card .primary {
-      width: 100%;
-      margin-top: 5px;
-    }
+    .auth-card .primary { width: 100%; margin-top: 5px; }
 
     .auth-switch {
       text-align: center;
@@ -302,15 +291,8 @@
       font-weight: 600;
     }
 
-    .person-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .person-name {
-      font-weight: 600;
-      overflow-wrap: anywhere;
-    }
+    .person-info { flex: 1; min-width: 0; }
+    .person-name { font-weight: 600; overflow-wrap: anywhere; }
 
     .person-subtitle {
       font-size: 12px;
@@ -357,13 +339,13 @@
     }
 
     .chat-header-info { min-width: 0; flex: 1; }
-
     .chat-header-name { font-weight: 600; }
 
     .chat-header-subtitle {
       color: var(--muted);
       font-size: 12px;
       margin-top: 4px;
+      min-height: 14px;
     }
 
     .messages {
@@ -374,6 +356,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      scroll-behavior: smooth;
     }
 
     .message-row {
@@ -381,9 +364,13 @@
       flex-direction: column;
       align-items: flex-start;
       max-width: 78%;
+      animation: messageAppear .2s ease-out;
     }
 
-    .message-row.mine { align-self: flex-end; align-items: flex-end; }
+    .message-row.mine {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
 
     .message-author {
       font-size: 11px;
@@ -416,12 +403,62 @@
 
     .composer input { flex: 1; min-width: 0; }
 
+    .composer input:disabled { opacity: .65; }
+
     .chat-empty {
       color: var(--muted);
       text-align: center;
       margin: auto;
       padding: 20px;
       line-height: 1.5;
+    }
+
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      align-self: flex-start;
+      padding: 11px 14px;
+      margin: 0 24px 10px;
+      background: #202020;
+      border-radius: 14px 14px 14px 4px;
+      width: fit-content;
+      animation: messageAppear .18s ease-out;
+    }
+
+    .typing-indicator span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #a0a0a0;
+      animation: typingBounce 1.2s infinite ease-in-out;
+    }
+
+    .typing-indicator span:nth-child(2) { animation-delay: .15s; }
+    .typing-indicator span:nth-child(3) { animation-delay: .3s; }
+
+    @keyframes typingBounce {
+      0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: .45;
+      }
+      30% {
+        transform: translateY(-4px);
+        opacity: 1;
+      }
+    }
+
+    @keyframes messageAppear {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+      }
     }
 
     @media (max-width: 650px) {
@@ -457,15 +494,12 @@
       }
 
       .topbar { height: 58px; padding: 0 18px; }
-
       .content { padding: 22px 16px; }
-
       .chat-panel { height: 65vh; min-height: 380px; }
-
       .chat-header { padding: 13px 16px; }
       .messages { padding: 18px 14px; }
       .composer { padding: 12px; }
-
+      .typing-indicator { margin-left: 14px; }
       .list-item { padding: 11px; }
       .item-actions { gap: 5px; }
       .item-actions button { padding: 9px; }
@@ -576,6 +610,10 @@
             <div class="chat-empty">Loading messages...</div>
           </div>
 
+          <div id="typingIndicator" class="typing-indicator hidden" aria-label="Friend is typing">
+            <span></span><span></span><span></span>
+          </div>
+
           <form id="messageForm" class="composer">
             <input id="messageInput" maxlength="4000" autocomplete="off" placeholder="Write a message..." required>
             <button id="sendButton" class="primary" type="submit">Send</button>
@@ -616,8 +654,12 @@
     let friendsUnsubscribe = null;
     let requestsUnsubscribe = null;
     let messagesUnsubscribe = null;
+    let typingUnsubscribe = null;
+    let typingTimer = null;
+    let typingStopTimer = null;
     let friendsCache = [];
     let requestsCache = [];
+    let sendingMessage = false;
 
     const $ = id => document.getElementById(id);
 
@@ -639,17 +681,115 @@
       return [firstId, secondId].sort().join("_");
     }
 
+    function stopTypingTimers() {
+      if (typingTimer) clearTimeout(typingTimer);
+      if (typingStopTimer) clearTimeout(typingStopTimer);
+      typingTimer = null;
+      typingStopTimer = null;
+    }
+
+    async function setMyTyping(isTyping) {
+      if (!currentUser || !activeChatId) return;
+
+      const chatId = activeChatId;
+      const uid = currentUser.uid;
+
+      try {
+        await db.collection("chats").doc(chatId)
+          .collection("typing").doc(uid).set({
+            uid,
+            username: currentProfile?.username || "User",
+            isTyping,
+            updatedAt: serverTimestamp()
+          });
+      } catch (error) {
+        console.error("Typing status error:", error);
+      }
+    }
+
+    function stopMyTyping() {
+      stopTypingTimers();
+      if (activeChatId) setMyTyping(false);
+    }
+
+    function handleTypingInput() {
+      if (!activeChatId || !activeFriendId) return;
+
+      if (!$("messageInput").value.trim()) {
+        stopMyTyping();
+        return;
+      }
+
+      if (typingTimer) clearTimeout(typingTimer);
+
+      typingTimer = setTimeout(() => {
+        setMyTyping(true);
+      }, 150);
+
+      if (typingStopTimer) clearTimeout(typingStopTimer);
+
+      typingStopTimer = setTimeout(() => {
+        setMyTyping(false);
+      }, 1800);
+    }
+
+    function startTypingListener(chatId, friendId) {
+      if (typingUnsubscribe) typingUnsubscribe();
+
+      $("typingIndicator").classList.add("hidden");
+
+      typingUnsubscribe = db.collection("chats").doc(chatId)
+        .collection("typing").doc(friendId)
+        .onSnapshot(snapshot => {
+          if (activeChatId !== chatId) return;
+
+          const data = snapshot.exists ? snapshot.data() : null;
+          const typing = Boolean(data?.isTyping);
+
+          $("typingIndicator").classList.toggle("hidden", !typing);
+          $("chatSubtitle").textContent = typing
+            ? "Typing..."
+            : "Direct message";
+
+          if (typing) {
+            $("messagesList").scrollTop = $("messagesList").scrollHeight;
+          }
+        }, error => {
+          console.error("Typing listener error:", error);
+        });
+    }
+
     function stopListeners() {
       if (friendsUnsubscribe) friendsUnsubscribe();
       if (requestsUnsubscribe) requestsUnsubscribe();
       if (messagesUnsubscribe) messagesUnsubscribe();
+      if (typingUnsubscribe) typingUnsubscribe();
 
       friendsUnsubscribe = null;
       requestsUnsubscribe = null;
       messagesUnsubscribe = null;
+      typingUnsubscribe = null;
+      stopTypingTimers();
+
+      $("typingIndicator").classList.add("hidden");
+    }
+
+    function closeActiveChat() {
+      stopMyTyping();
+
+      if (messagesUnsubscribe) messagesUnsubscribe();
+      if (typingUnsubscribe) typingUnsubscribe();
+
+      messagesUnsubscribe = null;
+      typingUnsubscribe = null;
+      activeChatId = null;
+      activeFriendId = null;
+
+      $("typingIndicator").classList.add("hidden");
     }
 
     function showPage(page) {
+      closeActiveChat();
       activePage = page;
       $("friendsPage").classList.toggle("hidden", page !== "friends");
       $("requestsPage").classList.toggle("hidden", page !== "requests");
@@ -666,7 +806,10 @@
       $("requestsPage").classList.add("hidden");
       $("chatPage").classList.remove("hidden");
       $("topbarTitle").textContent = "Messages";
-      document.querySelectorAll("[data-page]").forEach(button => button.classList.remove("active"));
+
+      document.querySelectorAll("[data-page]").forEach(button => {
+        button.classList.remove("active");
+      });
     }
 
     function renderEmpty(containerId, message) {
@@ -716,7 +859,9 @@
       actionBox.className = "item-actions";
 
       actions.forEach(action => {
-        actionBox.appendChild(makeButton(action.label, action.className || "secondary", action.onClick));
+        actionBox.appendChild(
+          makeButton(action.label, action.className || "secondary", action.onClick)
+        );
       });
 
       row.appendChild(actionBox);
@@ -777,7 +922,11 @@
           if (contact.exists) {
             $("searchResults").appendChild(
               makePersonRow(profile, "Already friends", [
-                { label: "Message", className: "primary", onClick: () => openChat(profile.uid, profile.username) }
+                {
+                  label: "Message",
+                  className: "primary",
+                  onClick: () => openChat(profile.uid, profile.username)
+                }
               ])
             );
             continue;
@@ -802,7 +951,11 @@
 
           if (!incoming.empty) {
             $("searchResults").appendChild(makePersonRow(profile, "They sent you a request", [
-              { label: "View requests", className: "secondary", onClick: () => showPage("requests") }
+              {
+                label: "View requests",
+                className: "secondary",
+                onClick: () => showPage("requests")
+              }
             ]));
             continue;
           }
@@ -886,17 +1039,13 @@
         const profile = await getProfile(friend.uid);
         if (!profile) continue;
 
-        list.appendChild(makePersonRow(
-          profile,
-          "Friend",
-          [
-            {
-              label: "Message",
-              className: "primary",
-              onClick: () => openChat(profile.uid, profile.username)
-            }
-          ]
-        ));
+        list.appendChild(makePersonRow(profile, "Friend", [
+          {
+            label: "Message",
+            className: "primary",
+            onClick: () => openChat(profile.uid, profile.username)
+          }
+        ]));
       }
 
       if (!list.children.length) {
@@ -1011,11 +1160,7 @@
     }
 
     async function openChat(friendId, friendName) {
-      if (messagesUnsubscribe) messagesUnsubscribe();
-      messagesUnsubscribe = null;
-
-      activeChatId = null;
-      activeFriendId = friendId;
+      closeActiveChat();
       showChatPanel();
 
       $("chatFriendName").textContent = friendName || "Conversation";
@@ -1028,6 +1173,9 @@
       loading.textContent = "Opening conversation...";
       $("messagesList").appendChild(loading);
 
+      $("messageInput").value = "";
+      $("messageInput").disabled = true;
+      $("sendButton").disabled = true;
       setStatus("chatStatus", "");
 
       try {
@@ -1062,6 +1210,12 @@
         }
 
         activeChatId = chatId;
+        activeFriendId = friendId;
+
+        $("messageInput").disabled = false;
+        $("sendButton").disabled = false;
+
+        startTypingListener(chatId, friendId);
 
         messagesUnsubscribe = chatRef.collection("messages")
           .orderBy("createdAt", "asc")
@@ -1070,6 +1224,9 @@
             if (activeChatId !== chatId) return;
 
             const messages = $("messagesList");
+            const wasNearBottom =
+              messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
+
             messages.replaceChildren();
 
             if (snapshot.empty) {
@@ -1101,7 +1258,9 @@
               messages.appendChild(row);
             });
 
-            messages.scrollTop = messages.scrollHeight;
+            if (wasNearBottom) {
+              messages.scrollTop = messages.scrollHeight;
+            }
           }, error => {
             console.error(error);
             setStatus("chatStatus", friendlyError(error), "error");
@@ -1117,10 +1276,10 @@
       event.preventDefault();
 
       const text = $("messageInput").value.trim();
-      if (!text || !activeChatId || !activeFriendId) return;
+      if (!text || !activeChatId || !activeFriendId || sendingMessage) return;
 
-      const button = $("sendButton");
-      button.disabled = true;
+      sendingMessage = true;
+      $("sendButton").disabled = true;
       setStatus("chatStatus", "");
 
       try {
@@ -1128,12 +1287,14 @@
           throw new Error("You must be mutual friends to message this account.");
         }
 
-        const chatRef = db.collection("chats").doc(activeChatId);
+        const chatId = activeChatId;
+        const friendId = activeFriendId;
+        const chatRef = db.collection("chats").doc(chatId);
         const chat = await chatRef.get();
 
         if (!chat.exists ||
             !(chat.data().participants || []).includes(currentUser.uid) ||
-            !(chat.data().participants || []).includes(activeFriendId)) {
+            !(chat.data().participants || []).includes(friendId)) {
           throw new Error("This conversation is unavailable.");
         }
 
@@ -1152,12 +1313,14 @@
         });
 
         $("messageInput").value = "";
+        await setMyTyping(false);
         $("messageInput").focus();
       } catch (error) {
         console.error(error);
         setStatus("chatStatus", friendlyError(error), "error");
       } finally {
-        button.disabled = false;
+        sendingMessage = false;
+        if (activeChatId) $("sendButton").disabled = false;
       }
     }
 
@@ -1182,7 +1345,7 @@
       }
       if (error?.code === "permission-denied" ||
           error?.code === "firestore/permission-denied") {
-        return "Firebase blocked this action. Your Firestore security rules may need updating.";
+        return "Firebase blocked this action. Check the Firestore security rules.";
       }
       if (error?.code === "unavailable") {
         return "Firebase is temporarily unavailable. Try again.";
@@ -1252,16 +1415,15 @@
 
     $("friendSearchForm").addEventListener("submit", searchUsers);
     $("messageForm").addEventListener("submit", sendMessage);
+    $("messageInput").addEventListener("input", handleTypingInput);
 
     $("backToFriends").addEventListener("click", () => {
-      if (messagesUnsubscribe) messagesUnsubscribe();
-      messagesUnsubscribe = null;
-      activeChatId = null;
-      activeFriendId = null;
+      closeActiveChat();
       showPage("friends");
     });
 
     $("signOutButton").addEventListener("click", async () => {
+      closeActiveChat();
       stopListeners();
       await auth.signOut();
     });
