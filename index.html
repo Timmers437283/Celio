@@ -358,6 +358,7 @@
       flex-direction: column;
       gap: 10px;
       scroll-behavior: smooth;
+      overscroll-behavior: contain;
     }
 
     .message-row {
@@ -365,7 +366,8 @@
       flex-direction: column;
       align-items: flex-start;
       max-width: 78%;
-      animation: messageAppear .2s ease-out;
+      animation: messageSendIn 280ms cubic-bezier(.16, 1, .3, 1) both;
+      transform-origin: bottom;
     }
 
     .message-row.mine {
@@ -413,7 +415,6 @@
       line-height: 1.5;
     }
 
-    /* Typing indicator now behaves like an incoming message row. */
     .typing-indicator {
       display: flex;
       align-items: center;
@@ -423,11 +424,11 @@
       gap: 4px;
       width: 52px;
       height: 38px;
-      margin: 0;
       padding: 0;
+      margin: 0;
       background: var(--message-incoming);
       border-radius: 14px 14px 14px 4px;
-      animation: messageAppear .18s ease-out;
+      animation: messageSendIn 220ms cubic-bezier(.16, 1, .3, 1) both;
     }
 
     .typing-indicator span {
@@ -440,13 +441,8 @@
       animation: typingBounce 1.2s infinite ease-in-out;
     }
 
-    .typing-indicator span:nth-child(2) {
-      animation-delay: .15s;
-    }
-
-    .typing-indicator span:nth-child(3) {
-      animation-delay: .3s;
-    }
+    .typing-indicator span:nth-child(2) { animation-delay: .15s; }
+    .typing-indicator span:nth-child(3) { animation-delay: .3s; }
 
     @keyframes typingBounce {
       0%, 60%, 100% {
@@ -459,9 +455,15 @@
       }
     }
 
-    @keyframes messageAppear {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
+    @keyframes messageSendIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px) scale(.97);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -666,6 +668,7 @@
     let friendsCache = [];
     let requestsCache = [];
     let sendingMessage = false;
+    let friendIsTyping = false;
 
     const $ = id => document.getElementById(id);
 
@@ -739,10 +742,44 @@
       }, 1800);
     }
 
+    function createTypingBubble() {
+      const indicator = document.createElement("div");
+      indicator.id = "typingIndicator";
+      indicator.className = "typing-indicator";
+      indicator.setAttribute("aria-label", "Friend is typing");
+
+      for (let i = 0; i < 3; i++) {
+        indicator.appendChild(document.createElement("span"));
+      }
+
+      return indicator;
+    }
+
+    function renderTypingBubble() {
+      const messages = $("messagesList");
+      let indicator = $("typingIndicator");
+
+      if (friendIsTyping) {
+        if (!indicator) {
+          indicator = createTypingBubble();
+          messages.appendChild(indicator);
+        }
+
+        if (indicator.parentElement !== messages) {
+          messages.appendChild(indicator);
+        }
+
+        indicator.classList.remove("hidden");
+      } else if (indicator) {
+        indicator.remove();
+      }
+    }
+
     function startTypingListener(chatId, friendId) {
       if (typingUnsubscribe) typingUnsubscribe();
 
-      $("messagesList").querySelector("#typingIndicator")?.remove();
+      friendIsTyping = false;
+      renderTypingBubble();
 
       typingUnsubscribe = db.collection("chats").doc(chatId)
         .collection("typing").doc(friendId)
@@ -750,35 +787,20 @@
           if (activeChatId !== chatId) return;
 
           const data = snapshot.exists ? snapshot.data() : null;
-          const typing = Boolean(data?.isTyping);
-          const messages = $("messagesList");
-          let indicator = $("typingIndicator");
+          friendIsTyping = Boolean(data?.isTyping);
 
-          if (typing) {
-            if (!indicator) {
-              indicator = document.createElement("div");
-              indicator.id = "typingIndicator";
-              indicator.className = "typing-indicator";
-              indicator.setAttribute("aria-label", "Friend is typing");
+          renderTypingBubble();
 
-              for (let i = 0; i < 3; i++) {
-                indicator.appendChild(document.createElement("span"));
-              }
-
-              messages.appendChild(indicator);
-            }
-
-            indicator.classList.remove("hidden");
-          } else if (indicator) {
-            indicator.remove();
-          }
-
-          $("chatSubtitle").textContent = typing
+          $("chatSubtitle").textContent = friendIsTyping
             ? "Typing..."
             : "Direct message";
 
-          if (typing) {
-            messages.scrollTop = messages.scrollHeight;
+          if (friendIsTyping) {
+            const messages = $("messagesList");
+            messages.scrollTo({
+              top: messages.scrollHeight,
+              behavior: "smooth"
+            });
           }
         }, error => {
           console.error("Typing listener error:", error);
@@ -796,6 +818,7 @@
       messagesUnsubscribe = null;
       typingUnsubscribe = null;
       stopTypingTimers();
+      friendIsTyping = false;
 
       $("messagesList").querySelector("#typingIndicator")?.remove();
     }
@@ -810,6 +833,7 @@
       typingUnsubscribe = null;
       activeChatId = null;
       activeFriendId = null;
+      friendIsTyping = false;
 
       $("messagesList").querySelector("#typingIndicator")?.remove();
     }
@@ -1253,9 +1277,6 @@
             const wasNearBottom =
               messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
 
-            const indicator = $("typingIndicator");
-            if (indicator) indicator.remove();
-
             messages.replaceChildren();
 
             if (snapshot.empty) {
@@ -1286,13 +1307,15 @@
               });
             }
 
-            // Keep the typing bubble inside the message list after message updates.
-            if (window.currentTypingVisible) {
-              addTypingBubble(messages);
-            }
+            renderTypingBubble();
 
-            if (wasNearBottom || window.currentTypingVisible) {
-              messages.scrollTop = messages.scrollHeight;
+            if (wasNearBottom || friendIsTyping) {
+              requestAnimationFrame(() => {
+                messages.scrollTo({
+                  top: messages.scrollHeight,
+                  behavior: "smooth"
+                });
+              });
             }
           }, error => {
             console.error(error);
@@ -1305,43 +1328,25 @@
       }
     }
 
-    function addTypingBubble(messages = $("messagesList")) {
-      let indicator = $("typingIndicator");
-
-      if (!indicator) {
-        indicator = document.createElement("div");
-        indicator.id = "typingIndicator";
-        indicator.className = "typing-indicator";
-        indicator.setAttribute("aria-label", "Friend is typing");
-
-        for (let i = 0; i < 3; i++) {
-          indicator.appendChild(document.createElement("span"));
-        }
-      }
-
-      if (indicator.parentElement !== messages) {
-        messages.appendChild(indicator);
-      }
-    }
-
     async function sendMessage(event) {
       event.preventDefault();
 
       const text = $("messageInput").value.trim();
       if (!text || !activeChatId || !activeFriendId || sendingMessage) return;
 
+      const chatId = activeChatId;
+      const friendId = activeFriendId;
+      const chatRef = db.collection("chats").doc(chatId);
+
       sendingMessage = true;
       $("sendButton").disabled = true;
       setStatus("chatStatus", "");
 
       try {
-        if (!(await hasMutualFriendship(activeFriendId))) {
+        if (!(await hasMutualFriendship(friendId))) {
           throw new Error("You must be mutual friends to message this account.");
         }
 
-        const chatId = activeChatId;
-        const friendId = activeFriendId;
-        const chatRef = db.collection("chats").doc(chatId);
         const chat = await chatRef.get();
 
         if (!chat.exists ||
@@ -1350,29 +1355,37 @@
           throw new Error("This conversation is unavailable.");
         }
 
-        const message = {
+        if (activeChatId !== chatId) return;
+
+        $("messageInput").value = "";
+        stopMyTyping();
+
+        await chatRef.collection("messages").add({
           senderId: currentUser.uid,
           senderUsername: currentProfile.username,
           text,
           createdAt: serverTimestamp()
-        };
-
-        await chatRef.collection("messages").add(message);
+        });
 
         await chatRef.update({
           lastMessage: text,
           updatedAt: serverTimestamp()
         });
 
-        $("messageInput").value = "";
-        await setMyTyping(false);
-        $("messageInput").focus();
+        if (activeChatId === chatId) {
+          $("messageInput").focus();
+        }
       } catch (error) {
         console.error(error);
         setStatus("chatStatus", friendlyError(error), "error");
+        if (activeChatId === chatId && !$("messageInput").value) {
+          $("messageInput").value = text;
+        }
       } finally {
         sendingMessage = false;
-        if (activeChatId) $("sendButton").disabled = false;
+        if (activeChatId === chatId) {
+          $("sendButton").disabled = false;
+        }
       }
     }
 
@@ -1490,6 +1503,7 @@
       currentProfile = null;
       activeChatId = null;
       activeFriendId = null;
+      friendIsTyping = false;
 
       if (!user) {
         $("appScreen").classList.add("hidden");
