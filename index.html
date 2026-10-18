@@ -373,6 +373,7 @@
     .message-row.mine {
       align-self: flex-end;
       align-items: flex-end;
+      position: relative;
     }
 
     .message-author {
@@ -397,28 +398,40 @@
     }
 
     .message-actions {
+      position: absolute;
+      right: 100%;
+      bottom: 0;
       display: flex;
-      justify-content: flex-end;
-      margin-top: 4px;
-      min-height: 22px;
-      opacity: .65;
-      transition: opacity .15s;
+      align-items: center;
+      justify-content: center;
+      padding-right: 8px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 150ms ease;
     }
 
-    .message-row:hover .message-actions,
-    .message-row:focus-within .message-actions {
+    .message-row.mine:hover .message-actions,
+    .message-row.mine:focus-within .message-actions {
       opacity: 1;
+      pointer-events: auto;
     }
 
     .delete-message-button {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 7px;
       background: transparent;
-      color: #ff7777;
-      font-size: 11px;
-      padding: 4px 7px;
-      border-radius: 5px;
+      color: #929292;
+      cursor: pointer;
     }
 
-    .delete-message-button:hover { background: #291414; }
+    .delete-message-button:hover {
+      color: #ff5555;
+      background: #251515;
+    }
 
     .delete-message-button:disabled {
       opacity: .5;
@@ -667,7 +680,7 @@
 
   <script>
     const firebaseConfig = {
-      apiKey: "AIzaSyAoD77U3rLamAjvefmT06-ByrZHkBlK7qo",
+      apiKey: "AIzaSyAoD77U3rLamAjvefmT06-ByYRhkKBlK7qo",
       authDomain: "celio-404aa.firebaseapp.com",
       projectId: "celio-404aa",
       storageBucket: "celio-404aa.firebasestorage.app",
@@ -685,7 +698,6 @@
     let currentUser = null;
     let currentProfile = null;
     let creatingAccount = false;
-    let activePage = "friends";
     let activeChatId = null;
     let activeFriendId = null;
     let friendsUnsubscribe = null;
@@ -698,18 +710,14 @@
     let requestsCache = [];
     let sendingMessage = false;
     let friendIsTyping = false;
-    const deletingMessages = new Set();
 
+    const deletingMessages = new Set();
     const $ = id => document.getElementById(id);
 
     function setStatus(id, message, type = "") {
       const element = $(id);
       element.textContent = message;
       element.className = "status" + (type ? " " + type : "");
-    }
-
-    function safeText(value) {
-      return String(value ?? "");
     }
 
     function usernameKey(username) {
@@ -760,29 +768,10 @@
       }
 
       if (typingTimer) clearTimeout(typingTimer);
-
-      typingTimer = setTimeout(() => {
-        setMyTyping(true);
-      }, 150);
+      typingTimer = setTimeout(() => setMyTyping(true), 150);
 
       if (typingStopTimer) clearTimeout(typingStopTimer);
-
-      typingStopTimer = setTimeout(() => {
-        setMyTyping(false);
-      }, 1800);
-    }
-
-    function createTypingBubble() {
-      const indicator = document.createElement("div");
-      indicator.id = "typingIndicator";
-      indicator.className = "typing-indicator";
-      indicator.setAttribute("aria-label", "Friend is typing");
-
-      for (let i = 0; i < 3; i++) {
-        indicator.appendChild(document.createElement("span"));
-      }
-
-      return indicator;
+      typingStopTimer = setTimeout(() => setMyTyping(false), 1800);
     }
 
     function renderTypingBubble() {
@@ -791,15 +780,19 @@
 
       if (friendIsTyping) {
         if (!indicator) {
-          indicator = createTypingBubble();
-          messages.appendChild(indicator);
+          indicator = document.createElement("div");
+          indicator.id = "typingIndicator";
+          indicator.className = "typing-indicator";
+          indicator.setAttribute("aria-label", "Friend is typing");
+
+          for (let i = 0; i < 3; i++) {
+            indicator.appendChild(document.createElement("span"));
+          }
         }
 
         if (indicator.parentElement !== messages) {
           messages.appendChild(indicator);
         }
-
-        indicator.classList.remove("hidden");
       } else if (indicator) {
         indicator.remove();
       }
@@ -818,7 +811,6 @@
 
           const data = snapshot.exists ? snapshot.data() : null;
           friendIsTyping = Boolean(data?.isTyping);
-
           renderTypingBubble();
 
           $("chatSubtitle").textContent = friendIsTyping
@@ -832,9 +824,7 @@
               behavior: "smooth"
             });
           }
-        }, error => {
-          console.error("Typing listener error:", error);
-        });
+        }, error => console.error("Typing listener error:", error));
     }
 
     function stopListeners() {
@@ -847,10 +837,9 @@
       requestsUnsubscribe = null;
       messagesUnsubscribe = null;
       typingUnsubscribe = null;
+
       stopTypingTimers();
       friendIsTyping = false;
-
-      $("messagesList").querySelector("#typingIndicator")?.remove();
     }
 
     function closeActiveChat() {
@@ -865,12 +854,12 @@
       activeFriendId = null;
       friendIsTyping = false;
 
-      $("messagesList").querySelector("#typingIndicator")?.remove();
+      $("messagesList").replaceChildren();
     }
 
     function showPage(page) {
       closeActiveChat();
-      activePage = page;
+
       $("friendsPage").classList.toggle("hidden", page !== "friends");
       $("requestsPage").classList.toggle("hidden", page !== "requests");
       $("chatPage").classList.add("hidden");
@@ -893,17 +882,19 @@
     }
 
     function renderEmpty(containerId, message) {
-      $(containerId).replaceChildren();
+      const container = $(containerId);
+      container.replaceChildren();
+
       const element = document.createElement("div");
       element.className = "empty";
       element.textContent = message;
-      $(containerId).appendChild(element);
+      container.appendChild(element);
     }
 
     function makeAvatar(name) {
       const avatar = document.createElement("div");
       avatar.className = "avatar";
-      avatar.textContent = safeText(name).trim().charAt(0).toUpperCase() || "?";
+      avatar.textContent = String(name || "?").trim().charAt(0).toUpperCase() || "?";
       return avatar;
     }
 
@@ -1001,13 +992,11 @@
 
           if (contact.exists) {
             $("searchResults").appendChild(
-              makePersonRow(profile, "Already friends", [
-                {
-                  label: "Message",
-                  className: "primary",
-                  onClick: () => openChat(profile.uid, profile.username)
-                }
-              ])
+              makePersonRow(profile, "Already friends", [{
+                label: "Message",
+                className: "primary",
+                onClick: () => openChat(profile.uid, profile.username)
+              }])
             );
             continue;
           }
@@ -1019,7 +1008,7 @@
             .limit(1).get();
 
           if (!outgoing.empty) {
-            $("searchResults").appendChild(makePersonRow(profile, "Request sent", []));
+            $("searchResults").appendChild(makePersonRow(profile, "Request sent"));
             continue;
           }
 
@@ -1030,23 +1019,19 @@
             .limit(1).get();
 
           if (!incoming.empty) {
-            $("searchResults").appendChild(makePersonRow(profile, "They sent you a request", [
-              {
-                label: "View requests",
-                className: "secondary",
-                onClick: () => showPage("requests")
-              }
-            ]));
+            $("searchResults").appendChild(makePersonRow(profile, "They sent you a request", [{
+              label: "View requests",
+              className: "secondary",
+              onClick: () => showPage("requests")
+            }]));
             continue;
           }
 
-          $("searchResults").appendChild(makePersonRow(profile, "Celio user", [
-            {
-              label: "Add friend",
-              className: "primary",
-              onClick: () => sendFriendRequest(profile)
-            }
-          ]));
+          $("searchResults").appendChild(makePersonRow(profile, "Celio user", [{
+            label: "Add friend",
+            className: "primary",
+            onClick: () => sendFriendRequest(profile)
+          }]));
         }
       } catch (error) {
         console.error(error);
@@ -1119,13 +1104,11 @@
         const profile = await getProfile(friend.uid);
         if (!profile) continue;
 
-        list.appendChild(makePersonRow(profile, "Friend", [
-          {
-            label: "Message",
-            className: "primary",
-            onClick: () => openChat(profile.uid, profile.username)
-          }
-        ]));
+        list.appendChild(makePersonRow(profile, "Friend", [{
+          label: "Message",
+          className: "primary",
+          onClick: () => openChat(profile.uid, profile.username)
+        }]));
       }
 
       if (!list.children.length) {
@@ -1245,13 +1228,10 @@
       const deletionKey = chatId + "/" + messageId;
       if (deletingMessages.has(deletionKey)) return;
 
-      if (!window.confirm("Delete this message? This action cannot be undone.")) {
-        return;
-      }
-
       deletingMessages.add(deletionKey);
       button.disabled = true;
-      button.textContent = "Deleting...";
+      button.setAttribute("aria-label", "Deleting message");
+      setStatus("chatStatus", "");
 
       try {
         const messageRef = db.collection("chats")
@@ -1278,11 +1258,13 @@
       } catch (error) {
         console.error("Delete message error:", error);
         setStatus("chatStatus", friendlyError(error), "error");
-
-        button.disabled = false;
-        button.textContent = "Delete";
       } finally {
         deletingMessages.delete(deletionKey);
+
+        if (button.isConnected) {
+          button.disabled = false;
+          button.setAttribute("aria-label", "Delete message");
+        }
       }
     }
 
@@ -1388,8 +1370,21 @@
                   const deleteButton = document.createElement("button");
                   deleteButton.type = "button";
                   deleteButton.className = "delete-message-button";
-                  deleteButton.textContent = "Delete";
-                  deleteButton.setAttribute("aria-label", "Delete your message");
+                  deleteButton.setAttribute("aria-label", "Delete message");
+                  deleteButton.title = "Delete message";
+
+                  deleteButton.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="17" height="17"
+                         fill="none" stroke="currentColor" stroke-width="1.7"
+                         stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                      <path d="M3 6h18"/>
+                      <path d="M8 6V4h8v2"/>
+                      <path d="m19 6-1 14H6L5 6"/>
+                      <path d="M10 11v5"/>
+                      <path d="M14 11v5"/>
+                    </svg>
+                  `;
 
                   deleteButton.addEventListener("click", () => {
                     deleteMessage(chatId, doc.id, deleteButton);
@@ -1408,6 +1403,7 @@
             if (wasNearBottom || friendIsTyping) {
               requestAnimationFrame(() => {
                 if (activeChatId !== chatId) return;
+
                 messages.scrollTo({
                   top: messages.scrollHeight,
                   behavior: "smooth"
@@ -1475,11 +1471,13 @@
       } catch (error) {
         console.error(error);
         setStatus("chatStatus", friendlyError(error), "error");
+
         if (activeChatId === chatId && !$("messageInput").value) {
           $("messageInput").value = text;
         }
       } finally {
         sendingMessage = false;
+
         if (activeChatId === chatId) {
           $("sendButton").disabled = false;
         }
@@ -1490,32 +1488,40 @@
       if (error?.code === "auth/email-already-in-use") {
         return "That email already has an account. Try signing in.";
       }
+
       if (error?.code === "auth/invalid-email") {
         return "Enter a valid email address.";
       }
+
       if (error?.code === "auth/weak-password") {
         return "Your password must be at least 6 characters.";
       }
+
       if (error?.code === "auth/invalid-credential" ||
           error?.code === "auth/wrong-password" ||
           error?.code === "auth/user-not-found") {
         return "Email or password is incorrect.";
       }
+
       if (error?.code === "auth/api-key-not-valid" ||
           error?.code === "auth/invalid-api-key" ||
           error?.code === "auth/invalid-api-key.-please-pass-a-valid-api-key.") {
         return "Firebase rejected the API key. Verify the exact key in Firebase Project settings and Google Cloud.";
       }
+
       if (error?.code === "auth/unauthorized-domain") {
         return "This website domain is not authorized in Firebase Authentication settings.";
       }
+
       if (error?.code === "permission-denied" ||
           error?.code === "firestore/permission-denied") {
         return "Firebase blocked this action. Check the Firestore security rules.";
       }
+
       if (error?.code === "unavailable") {
         return "Firebase is temporarily unavailable. Try again.";
       }
+
       return error?.message || "Something went wrong. Please try again.";
     }
 
@@ -1526,12 +1532,14 @@
       $("authDescription").textContent = creatingAccount
         ? "Create your Celio account to start connecting."
         : "Sign in to continue to your conversations.";
+
       $("usernameField").classList.toggle("hidden", !creatingAccount);
       $("usernameInput").required = creatingAccount;
       $("passwordInput").autocomplete = creatingAccount ? "new-password" : "current-password";
       $("authSubmit").textContent = creatingAccount ? "Create account" : "Sign in";
       $("switchText").textContent = creatingAccount ? "Already have an account?" : "New to Celio?";
       $("switchAuth").textContent = creatingAccount ? "Sign in" : "Create account";
+
       setStatus("authStatus", "");
     });
 
