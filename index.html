@@ -70,7 +70,9 @@
     .list-item { min-width: 0; padding: 14px; display: flex; align-items: center; gap: 13px; border: 1px solid var(--border); border-radius: 10px; }
     .avatar { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; background: #202020; color: #d9eaff; border-radius: 50%; font-size: 16px; font-weight: 600; }
     .person-info { min-width: 0; flex: 1; }
-    .person-name { font-weight: 600; overflow-wrap: anywhere; }
+    .person-name { min-width: 0; display: flex; align-items: center; gap: 8px; font-weight: 600; overflow-wrap: anywhere; }
+    .person-name-text { min-width: 0; overflow-wrap: anywhere; }
+    .unread-badge { min-width: 20px; height: 20px; padding: 0 6px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: #e53935; color: #fff; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 20px; }
     .person-subtitle { margin-top: 4px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
     .item-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
     .empty { padding: 28px 16px; color: var(--muted); text-align: center; line-height: 1.5; border: 1px dashed #303030; border-radius: 10px; }
@@ -294,6 +296,11 @@
 
     const deletingMessages = new Set();
     const receiptUpdates = new Set();
+
+    /* Unread message counts */
+    const unreadCounts = new Map();
+    const unreadListeners = new Map();
+
     const $ = id => document.getElementById(id);
 
     function setStatus(id, message, type = "") {
@@ -404,22 +411,130 @@
         }, error => console.error("Typing listener error:", error));
     }
 
+    /* Unread message badges */
+
+    function updateFriendUnreadBadge(friendId, count) {
+      const safeCount = Math.max(0, Number(count) || 0);
+      unreadCounts.set(friendId, safeCount);
+
+      const rows = document.querySelectorAll(".friend-row");
+      rows.forEach(row => {
+        if (row.dataset.personUid !== friendId) return;
+
+        const badge = row.querySelector(".unread-badge");
+        if (!badge) return;
+
+        badge.textContent = safeCount > 99 ? "99+" : String(safeCount);
+        badge.classList.toggle("hidden", safeCount === 0);
+        badge.setAttribute(
+          "aria-label",
+          safeCount + (safeCount === 1 ? " unread message" : " unread messages")
+        );
+      });
+    }
+
+    function stopUnreadListener(friendId) {
+      const listener = unreadListeners.get(friendId);
+      if (listener) {
+        if (listener.chatUnsubscribe) listener.chatUnsubscribe();
+        if (listener.messagesUnsubscribe) listener.messagesUnsubscribe();
+        unreadListeners.delete(friendId);
+      }
+      unreadCounts.delete(friendId);
+    }
+
+    function startUnreadListener(friendId) {
+      if (!currentUser || unreadListeners.has(friendId)) return;
+
+      const uid = currentUser.uid;
+      const chatId = chatIdFor(uid, friendId);
+      const chatRef = db.collection("chats").doc(chatId);
+      const listener = {
+        chatUnsubscribe: null,
+        messagesUnsubscribe: null
+      };
+
+      unreadListeners.set(friendId, listener);
+
+      listener.chatUnsubscribe = chatRef.onSnapshot(snapshot => {
+        if (!currentUser || currentUser.uid !== uid || !unreadListeners.has(friendId)) return;
+
+        if (!snapshot.exists) {
+          if (listener.messagesUnsubscribe) {
+            listener.messagesUnsubscribe();
+            listener.messagesUnsubscribe = null;
+          }
+          updateFriendUnreadBadge(friendId, 0);
+          return;
+        }
+
+        const participants = snapshot.data().participants || [];
+        if (!participants.includes(uid) || !participants.includes(friendId)) {
+          updateFriendUnreadBadge(friendId, 0);
+          return;
+        }
+
+        if (listener.messagesUnsubscribe) return;
+
+        listener.messagesUnsubscribe = chatRef.collection("messages")
+          .where("senderId", "==", friendId)
+          .onSnapshot(messageSnapshot => {
+            if (!currentUser || currentUser.uid !== uid || !unreadListeners.has(friendId)) return;
+
+            let unread = 0;
+            messageSnapshot.forEach(messageDoc => {
+              const message = messageDoc.data();
+              const readBy = Array.isArray(message.readBy) ? message.readBy : [];
+
+              if (!readBy.includes(uid)) unread++;
+            });
+
+            updateFriendUnreadBadge(friendId, unread);
+          }, error => {
+            console.error("Unread message listener error:", error);
+          });
+      }, error => {
+        console.error("Unread chat listener error:", error);
+      });
+    }
+
+    function syncUnreadListeners(friends) {
+      const friendIds = new Set(friends.map(friend => friend.uid));
+
+      for (const friendId of [...unreadListeners.keys()]) {
+        if (!friendIds.has(friendId)) stopUnreadListener(friendId);
+      }
+
+      friends.forEach(friend => startUnreadListener(friend.uid));
+    }
+
+    function stopAllUnreadListeners() {
+      for (const friendId of [...unreadListeners.keys()]) {
+        stopUnreadListener(friendId);
+      }
+    }
+
     function stopListeners() {
       [friendsUnsubscribe, requestsUnsubscribe, messagesUnsubscribe, typingUnsubscribe].forEach(unsubscribe => {
         if (unsubscribe) unsubscribe();
       });
+
       friendsUnsubscribe = null;
       requestsUnsubscribe = null;
       messagesUnsubscribe = null;
       typingUnsubscribe = null;
+
+      stopAllUnreadListeners();
       stopTypingTimers();
       friendIsTyping = false;
     }
 
     function closeActiveChat() {
       stopMyTyping();
+
       if (messagesUnsubscribe) messagesUnsubscribe();
       if (typingUnsubscribe) typingUnsubscribe();
+
       messagesUnsubscribe = null;
       typingUnsubscribe = null;
       activeChatId = null;
@@ -434,6 +549,7 @@
       $("requestsPage").classList.toggle("hidden", page !== "requests");
       $("chatPage").classList.add("hidden");
       $("topbarTitle").textContent = page === "friends" ? "Friends" : "Requests";
+
       document.querySelectorAll("[data-page]").forEach(button => {
         button.classList.toggle("active", button.dataset.page === page);
       });
@@ -474,25 +590,50 @@
       return button;
     }
 
-    function makePersonRow(profile, subtitle, actions = []) {
+    function makePersonRow(profile, subtitle, actions = [], options = {}) {
       const row = document.createElement("div");
       row.className = "list-item";
+      row.dataset.personUid = profile.uid;
+
+      if (options.unreadBadge) row.classList.add("friend-row");
+
       row.appendChild(makeAvatar(profile.username));
 
       const info = document.createElement("div");
       info.className = "person-info";
+
       const name = document.createElement("div");
       name.className = "person-name";
-      name.textContent = profile.username || "User";
+
+      const nameText = document.createElement("span");
+      nameText.className = "person-name-text";
+      nameText.textContent = profile.username || "User";
+      name.appendChild(nameText);
+
+      if (options.unreadBadge) {
+        const badge = document.createElement("span");
+        badge.className = "unread-badge hidden";
+        badge.textContent = "0";
+        badge.setAttribute("aria-label", "0 unread messages");
+        name.appendChild(badge);
+      }
+
       const sub = document.createElement("div");
       sub.className = "person-subtitle";
       sub.textContent = subtitle || "";
+
       info.append(name, sub);
       row.appendChild(info);
 
       const actionBox = document.createElement("div");
       actionBox.className = "item-actions";
-      actions.forEach(action => actionBox.appendChild(makeButton(action.label, action.className || "secondary", action.onClick)));
+
+      actions.forEach(action => {
+        actionBox.appendChild(
+          makeButton(action.label, action.className || "secondary", action.onClick)
+        );
+      });
+
       row.appendChild(actionBox);
       return row;
     }
@@ -504,8 +645,13 @@
 
     async function hasMutualFriendship(friendId) {
       if (!currentUser || friendId === currentUser.uid) return false;
-      const mine = await db.collection("friends").doc(currentUser.uid).collection("contacts").doc(friendId).get();
-      const theirs = await db.collection("friends").doc(friendId).collection("contacts").doc(currentUser.uid).get();
+
+      const mine = await db.collection("friends").doc(currentUser.uid)
+        .collection("contacts").doc(friendId).get();
+
+      const theirs = await db.collection("friends").doc(friendId)
+        .collection("contacts").doc(currentUser.uid).get();
+
       return mine.exists && theirs.exists;
     }
 
@@ -524,8 +670,12 @@
       button.disabled = true;
 
       try {
-        const snapshot = await db.collection("users").where("usernameLower", "==", query).limit(10).get();
-        const results = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })).filter(profile => profile.uid !== currentUser.uid);
+        const snapshot = await db.collection("users")
+          .where("usernameLower", "==", query).limit(10).get();
+
+        const results = snapshot.docs
+          .map(doc => ({ uid: doc.id, ...doc.data() }))
+          .filter(profile => profile.uid !== currentUser.uid);
 
         if (!results.length) {
           renderEmpty("searchResults", "No account found with that exact username.");
@@ -533,11 +683,14 @@
         }
 
         for (const profile of results) {
-          const contact = await db.collection("friends").doc(currentUser.uid).collection("contacts").doc(profile.uid).get();
+          const contact = await db.collection("friends").doc(currentUser.uid)
+            .collection("contacts").doc(profile.uid).get();
 
           if (contact.exists) {
             $("searchResults").appendChild(makePersonRow(profile, "Already friends", [{
-              label: "Message", className: "primary", onClick: () => openChat(profile.uid, profile.username)
+              label: "Message",
+              className: "primary",
+              onClick: () => openChat(profile.uid, profile.username)
             }]));
             continue;
           }
@@ -559,13 +712,17 @@
 
           if (!incoming.empty) {
             $("searchResults").appendChild(makePersonRow(profile, "They sent you a request", [{
-              label: "View requests", className: "secondary", onClick: () => showPage("requests")
+              label: "View requests",
+              className: "secondary",
+              onClick: () => showPage("requests")
             }]));
             continue;
           }
 
           $("searchResults").appendChild(makePersonRow(profile, "Celio user", [{
-            label: "Add friend", className: "primary", onClick: () => sendFriendRequest(profile)
+            label: "Add friend",
+            className: "primary",
+            onClick: () => sendFriendRequest(profile)
           }]));
         }
       } catch (error) {
@@ -578,6 +735,7 @@
 
     async function sendFriendRequest(profile) {
       setStatus("friendsStatus", "");
+
       try {
         const existing = await db.collection("friendRequests")
           .where("senderId", "==", currentUser.uid)
@@ -608,9 +766,12 @@
 
     function startFriendsListener() {
       if (friendsUnsubscribe) friendsUnsubscribe();
-      friendsUnsubscribe = db.collection("friends").doc(currentUser.uid).collection("contacts")
+
+      friendsUnsubscribe = db.collection("friends").doc(currentUser.uid)
+        .collection("contacts")
         .onSnapshot(async snapshot => {
           friendsCache = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+          syncUnreadListeners(friendsCache);
           await renderFriends();
         }, error => {
           console.error(error);
@@ -631,9 +792,14 @@
         const profile = await getProfile(friend.uid);
         if (!profile) continue;
 
-        list.appendChild(makePersonRow(profile, "Friend", [{
-          label: "Message", className: "primary", onClick: () => openChat(profile.uid, profile.username)
-        }]));
+        const row = makePersonRow(profile, "Friend", [{
+          label: "Message",
+          className: "primary",
+          onClick: () => openChat(profile.uid, profile.username)
+        }], { unreadBadge: true });
+
+        list.appendChild(row);
+        updateFriendUnreadBadge(profile.uid, unreadCounts.get(profile.uid) || 0);
       }
 
       if (!list.children.length) renderEmpty("friendsList", "Your friends will appear here.");
@@ -641,6 +807,7 @@
 
     function startRequestsListener() {
       if (requestsUnsubscribe) requestsUnsubscribe();
+
       requestsUnsubscribe = db.collection("friendRequests")
         .where("receiverId", "==", currentUser.uid)
         .where("status", "==", "pending")
@@ -675,6 +842,7 @@
 
     async function acceptFriendRequest(request) {
       setStatus("requestsStatus", "");
+
       try {
         const ref = db.collection("friendRequests").doc(request.id);
         const fresh = await ref.get();
@@ -688,17 +856,19 @@
         const other = await getProfile(request.senderId);
         const batch = db.batch();
 
-        batch.set(db.collection("friends").doc(currentUser.uid).collection("contacts").doc(request.senderId), {
-          uid: request.senderId,
-          username: other?.username || request.senderUsername || "User",
-          createdAt: serverTimestamp()
-        });
+        batch.set(db.collection("friends").doc(currentUser.uid)
+          .collection("contacts").doc(request.senderId), {
+            uid: request.senderId,
+            username: other?.username || request.senderUsername || "User",
+            createdAt: serverTimestamp()
+          });
 
-        batch.set(db.collection("friends").doc(request.senderId).collection("contacts").doc(currentUser.uid), {
-          uid: currentUser.uid,
-          username: currentProfile.username,
-          createdAt: serverTimestamp()
-        });
+        batch.set(db.collection("friends").doc(request.senderId)
+          .collection("contacts").doc(currentUser.uid), {
+            uid: currentUser.uid,
+            username: currentProfile.username,
+            createdAt: serverTimestamp()
+          });
 
         await batch.commit();
         setStatus("requestsStatus", "Friend request accepted.", "success");
@@ -722,6 +892,7 @@
 
     async function deleteMessage(chatId, messageId, button) {
       if (!currentUser || activeChatId !== chatId) return;
+
       const key = chatId + "/" + messageId;
       if (deletingMessages.has(key)) return;
 
@@ -737,10 +908,12 @@
           setStatus("chatStatus", "This message has already been deleted.", "error");
           return;
         }
+
         if (snapshot.data().senderId !== currentUser.uid) {
           setStatus("chatStatus", "You can only delete your own messages.", "error");
           return;
         }
+
         if (activeChatId !== chatId) return;
 
         await ref.delete();
@@ -757,6 +930,7 @@
     function makeDeleteButton(chatId, messageId) {
       const actions = document.createElement("div");
       actions.className = "message-actions";
+
       const button = document.createElement("button");
       button.type = "button";
       button.className = "delete-message-button";
@@ -764,6 +938,7 @@
       button.title = "Delete message";
       button.innerHTML = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>`;
       button.addEventListener("click", () => deleteMessage(chatId, messageId, button));
+
       actions.appendChild(button);
       return actions;
     }
@@ -779,6 +954,7 @@
     function addYouTubePreview(row, text) {
       const videoId = getYouTubeVideoId(text);
       if (!videoId) return;
+
       const videoUrl = "https://www.youtube.com/watch?v=" + videoId;
       const card = document.createElement("a");
       card.className = "youtube-preview";
@@ -794,15 +970,19 @@
 
       const info = document.createElement("div");
       info.className = "youtube-preview-info";
+
       const title = document.createElement("div");
       title.className = "youtube-preview-title";
       title.textContent = "YouTube video";
+
       const channel = document.createElement("div");
       channel.className = "youtube-preview-channel";
       channel.textContent = "Watch on YouTube";
+
       const domain = document.createElement("div");
       domain.className = "youtube-preview-domain";
       domain.textContent = "youtube.com";
+
       info.append(title, channel, domain);
       card.append(thumbnail, info);
       row.appendChild(card);
@@ -826,6 +1006,7 @@
 
     function formatMessageTime(timestamp) {
       if (!timestamp || typeof timestamp.toDate !== "function") return "";
+
       return timestamp.toDate().toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
@@ -845,6 +1026,7 @@
       if (mine && activeFriendId) {
         const receipt = document.createElement("span");
         receipt.className = "message-receipt";
+
         const deliveredTo = Array.isArray(data.deliveredTo) ? data.deliveredTo : [];
         const readBy = Array.isArray(data.readBy) ? data.readBy : [];
 
@@ -859,6 +1041,7 @@
 
         meta.appendChild(receipt);
       }
+
       row.appendChild(meta);
     }
 
@@ -880,6 +1063,7 @@
 
       const deliveredTo = Array.isArray(data.deliveredTo) ? data.deliveredTo : [];
       const readBy = Array.isArray(data.readBy) ? data.readBy : [];
+
       receipt.classList.remove("read");
 
       if (activeFriendId && readBy.includes(activeFriendId)) {
@@ -894,6 +1078,7 @@
 
     async function updateIncomingReceipts(docs, chatId) {
       if (!currentUser || activeChatId !== chatId) return;
+
       const uid = currentUser.uid;
       const shouldMarkRead = document.visibilityState === "visible";
 
@@ -903,8 +1088,10 @@
 
         const deliveredTo = Array.isArray(data.deliveredTo) ? data.deliveredTo : [];
         const readBy = Array.isArray(data.readBy) ? data.readBy : [];
+
         const needsDelivery = !deliveredTo.includes(uid);
         const needsRead = shouldMarkRead && !readBy.includes(uid);
+
         if (!needsDelivery && !needsRead) continue;
 
         const key = chatId + "/" + doc.id + "/" + uid;
@@ -913,14 +1100,17 @@
 
         try {
           const changes = {};
+
           if (needsDelivery) {
             changes.deliveredTo = arrayUnion(uid);
             changes.deliveredAt = serverTimestamp();
           }
+
           if (needsRead) {
             changes.readBy = arrayUnion(uid);
             changes.readAt = serverTimestamp();
           }
+
           await db.collection("chats").doc(chatId).collection("messages").doc(doc.id).update(changes);
         } catch (error) {
           console.error("Could not update message receipt:", error);
@@ -932,12 +1122,18 @@
 
     async function markVisibleMessagesRead() {
       const chatId = activeChatId;
-      if (!currentUser || !chatId || document.visibilityState !== "visible") return;
+      const friendId = activeFriendId;
+
+      if (!currentUser || !chatId || !friendId || document.visibilityState !== "visible") return;
 
       try {
+        /* Mark all incoming messages read, not just the latest 100. */
         const snapshot = await db.collection("chats").doc(chatId).collection("messages")
-          .orderBy("createdAt", "asc").limitToLast(100).get();
-        if (activeChatId !== chatId) return;
+          .where("senderId", "==", friendId)
+          .get();
+
+        if (activeChatId !== chatId || document.visibilityState !== "visible") return;
+
         await updateIncomingReceipts(snapshot.docs, chatId);
       } catch (error) {
         console.error("Could not mark messages as read:", error);
@@ -953,6 +1149,7 @@
     function renderMessage(doc, friendName, chatId) {
       const data = doc.data();
       const mine = data.senderId === currentUser.uid;
+
       const row = document.createElement("div");
       row.className = "message-row" + (mine ? " mine" : "");
       row.dataset.messageId = doc.id;
@@ -1008,6 +1205,7 @@
 
       addMessageMeta(row, data, mine);
       if (mine) row.appendChild(makeDeleteButton(chatId, doc.id));
+
       return row;
     }
 
@@ -1055,6 +1253,7 @@
           });
         } else {
           const existingParticipants = chat.data().participants || [];
+
           if (existingParticipants.length !== 2 || !participants.every(id => existingParticipants.includes(id))) {
             throw new Error("This conversation has invalid participant data.");
           }
@@ -1062,9 +1261,11 @@
 
         activeChatId = chatId;
         activeFriendId = friendId;
+
         $("messageInput").disabled = false;
         $("sendButton").disabled = false;
         $("attachButton").disabled = false;
+
         startTypingListener(chatId, friendId);
 
         messagesUnsubscribe = chatRef.collection("messages")
@@ -1080,11 +1281,13 @@
             if (snapshot.empty) {
               if (!messages.querySelector(".chat-empty")) {
                 messages.replaceChildren();
+
                 const empty = document.createElement("div");
                 empty.className = "chat-empty";
                 empty.textContent = "This is the beginning of your conversation.";
                 messages.appendChild(empty);
               }
+
               renderTypingBubble();
               return;
             }
@@ -1118,12 +1321,14 @@
                   messages.insertBefore(row, nextRow);
                 } else {
                   const indicator = $("typingIndicator");
+
                   if (indicator && indicator.parentElement === messages) {
                     messages.insertBefore(row, indicator);
                   } else {
                     messages.appendChild(row);
                   }
                 }
+
                 return;
               }
 
@@ -1147,6 +1352,9 @@
             console.error("Message listener error:", error);
             setStatus("chatStatus", friendlyError(error), "error");
           });
+
+        /* Mark all incoming messages read as soon as the conversation opens. */
+        await markVisibleMessagesRead();
       } catch (error) {
         console.error(error);
         $("messagesList").replaceChildren();
@@ -1171,6 +1379,7 @@
 
     async function sendMessage(event) {
       event.preventDefault();
+
       const text = $("messageInput").value.trim();
       if (!text || !activeChatId || !activeFriendId || sendingMessage) return;
 
@@ -1200,13 +1409,18 @@
         });
 
         await chatRef.update({ lastMessage: text, updatedAt: serverTimestamp() });
+
         if (activeChatId === chatId) $("messageInput").focus();
       } catch (error) {
         console.error(error);
         setStatus("chatStatus", friendlyError(error), "error");
-        if (activeChatId === chatId && !$("messageInput").value) $("messageInput").value = text;
+
+        if (activeChatId === chatId && !$("messageInput").value) {
+          $("messageInput").value = text;
+        }
       } finally {
         sendingMessage = false;
+
         if (activeChatId === chatId) {
           $("sendButton").disabled = false;
           $("attachButton").disabled = false;
@@ -1221,12 +1435,14 @@
         const xhr = new XMLHttpRequest();
         const endpoint = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
         const formData = new FormData();
+
         formData.append("file", file);
         formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
         xhr.open("POST", endpoint);
 
         xhr.upload.addEventListener("progress", event => {
           if (!event.lengthComputable) return;
+
           const progress = Math.round(event.loaded / event.total * 100);
           $("uploadTrack").classList.remove("hidden");
           $("uploadFill").style.width = progress + "%";
@@ -1235,7 +1451,11 @@
 
         xhr.addEventListener("load", () => {
           let result = {};
-          try { result = JSON.parse(xhr.responseText); } catch {}
+
+          try {
+            result = JSON.parse(xhr.responseText);
+          } catch {}
+
           if (xhr.status >= 200 && xhr.status < 300 && result.secure_url) {
             resolve(result);
           } else {
@@ -1251,6 +1471,7 @@
 
     async function sendMedia(file) {
       if (!file || !activeChatId || !activeFriendId || sendingMessage) return;
+
       const isVideo = file.type.startsWith("video/");
       const isImage = file.type.startsWith("image/");
 
@@ -1258,18 +1479,22 @@
         setStatus("chatStatus", "Choose an image, GIF, or video file.", "error");
         return;
       }
+
       if (isImage && file.size > MAX_IMAGE_SIZE) {
         setStatus("chatStatus", "Images and GIFs must be 10 MB or smaller.", "error");
         return;
       }
+
       if (isVideo && file.size > MAX_VIDEO_SIZE) {
         setStatus("chatStatus", "Videos must be 50 MB or smaller.", "error");
         return;
       }
+
       if (isVideo && !["video/mp4", "video/webm", "video/quicktime"].includes(file.type)) {
         setStatus("chatStatus", "Use an MP4, WebM, or MOV video.", "error");
         return;
       }
+
       if (isImage && !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
         setStatus("chatStatus", "Use a JPG, PNG, WebP, or GIF image.", "error");
         return;
@@ -1297,6 +1522,7 @@
         }
 
         const mediaType = isVideo ? "video" : "image";
+
         await chatRef.collection("messages").add({
           senderId: currentUser.uid,
           senderUsername: currentProfile.username,
@@ -1337,7 +1563,10 @@
     $("switchAuth").addEventListener("click", () => {
       creatingAccount = !creatingAccount;
       $("authTitle").textContent = creatingAccount ? "Create your account" : "Welcome back";
-      $("authDescription").textContent = creatingAccount ? "Create your Celio account to start connecting." : "Sign in to continue to your conversations.";
+      $("authDescription").textContent = creatingAccount
+        ? "Create your Celio account to start connecting."
+        : "Sign in to continue to your conversations.";
+
       $("usernameField").classList.toggle("hidden", !creatingAccount);
       $("usernameInput").required = creatingAccount;
       $("passwordInput").autocomplete = creatingAccount ? "new-password" : "current-password";
@@ -1350,9 +1579,11 @@
     $("accountForm").addEventListener("submit", async event => {
       event.preventDefault();
       setStatus("authStatus", "");
+
       const email = $("emailInput").value.trim();
       const password = $("passwordInput").value;
       const username = $("usernameInput").value.trim();
+
       $("authSubmit").disabled = true;
 
       try {
@@ -1362,10 +1593,13 @@
           }
 
           const lower = usernameKey(username);
-          const matching = await db.collection("users").where("usernameLower", "==", lower).limit(1).get();
+          const matching = await db.collection("users")
+            .where("usernameLower", "==", lower).limit(1).get();
+
           if (!matching.empty) throw new Error("That username is already taken.");
 
           const credential = await auth.createUserWithEmailAndPassword(email, password);
+
           await db.collection("users").doc(credential.user.uid).set({
             uid: credential.user.uid,
             username,
@@ -1422,16 +1656,20 @@
       currentProfile = null;
       activeChatId = null;
       activeFriendId = null;
+      friendsCache = [];
+      requestsCache = [];
       friendIsTyping = false;
 
       if (!user) {
         $("appScreen").classList.add("hidden");
         $("authScreen").classList.remove("hidden");
+        renderEmpty("friendsList", "Sign in to see your friends.");
         return;
       }
 
       try {
         currentProfile = await getProfile(user.uid);
+
         if (!currentProfile) {
           await auth.signOut();
           setStatus("authStatus", "Your profile could not be found. Please sign in again.", "error");
@@ -1442,6 +1680,7 @@
         $("accountId").textContent = "Account ID: " + user.uid;
         $("authScreen").classList.add("hidden");
         $("appScreen").classList.remove("hidden");
+
         showPage("friends");
         startFriendsListener();
         startRequestsListener();
