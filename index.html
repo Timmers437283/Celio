@@ -34,8 +34,7 @@
       font: 14px "Google Sans", Arial, sans-serif;
     }
 
-    button,
-    input {
+    button, input {
       font: inherit;
     }
 
@@ -503,6 +502,33 @@
       line-height: 1.45;
     }
 
+    /* Timestamps and receipts */
+
+    .message-meta {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 4px 5px 0;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .message-row.mine .message-meta {
+      align-self: flex-end;
+    }
+
+    .message-time,
+    .message-receipt {
+      white-space: nowrap;
+    }
+
+    .message-receipt.read {
+      color: #65b8ff;
+    }
+
     /* YouTube previews */
 
     .youtube-preview {
@@ -963,21 +989,22 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
   <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyAoD77U3rLamAjvefmT06-ByrZHkBlK7qo",
-  authDomain: "celio-404aa.firebaseapp.com",
-  projectId: "celio-404aa",
-  storageBucket: "celio-404aa.firebasestorage.app",
-  messagingSenderId: "823841413279",
-  appId: "1:823841413279:web:efefaf2efac7dd9b026aaa",
-  measurementId: "G-QSZYPKK71J"
-};
+    const firebaseConfig = {
+      apiKey: "AIzaSyAoD77U3rLamAjvefmT06-ByYRkBlK7qo",
+      authDomain: "celio-404aa.firebaseapp.com",
+      projectId: "celio-404aa",
+      storageBucket: "celio-404aa.firebasestorage.app",
+      messagingSenderId: "823841413279",
+      appId: "1:823841413279:web:efefaf2efac7dd9b026aaa",
+      measurementId: "G-QSZYPKK71J"
+    };
 
     firebase.initializeApp(firebaseConfig);
 
     const auth = firebase.auth();
     const db = firebase.firestore();
     const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp;
+    const arrayUnion = firebase.firestore.FieldValue.arrayUnion;
 
     const CLOUDINARY_CLOUD_NAME = "lpeuk0wj";
     const CLOUDINARY_UPLOAD_PRESET = "celio_uploads";
@@ -1007,6 +1034,7 @@ const firebaseConfig = {
     let friendIsTyping = false;
 
     const deletingMessages = new Set();
+    const receiptUpdates = new Set();
     const $ = id => document.getElementById(id);
 
     function setStatus(id, message, type = "") {
@@ -1040,7 +1068,11 @@ const firebaseConfig = {
         return "Email or password is incorrect.";
       }
 
-      if (["auth/api-key-not-valid", "auth/invalid-api-key", "auth/invalid-api-key.-please-pass-a-valid-api-key."].includes(error?.code)) {
+      if ([
+        "auth/api-key-not-valid",
+        "auth/invalid-api-key",
+        "auth/invalid-api-key.-please-pass-a-valid-api-key."
+      ].includes(error?.code)) {
         return "Firebase rejected the API key. Verify the exact key in Firebase Project settings.";
       }
 
@@ -1076,12 +1108,13 @@ const firebaseConfig = {
       const uid = currentUser.uid;
 
       try {
-        await db.collection("chats").doc(chatId).collection("typing").doc(uid).set({
-          uid,
-          username: currentProfile?.username || "User",
-          isTyping,
-          updatedAt: serverTimestamp()
-        });
+        await db.collection("chats").doc(chatId)
+          .collection("typing").doc(uid).set({
+            uid,
+            username: currentProfile?.username || "User",
+            isTyping,
+            updatedAt: serverTimestamp()
+          });
       } catch (error) {
         console.error("Typing status error:", error);
       }
@@ -1150,7 +1183,9 @@ const firebaseConfig = {
           friendIsTyping = Boolean(snapshot.exists && snapshot.data()?.isTyping);
           renderTypingBubble();
 
-          $("chatSubtitle").textContent = friendIsTyping ? "Typing..." : "Direct message";
+          $("chatSubtitle").textContent = friendIsTyping
+            ? "Typing..."
+            : "Direct message";
 
           if (friendIsTyping) {
             $("messagesList").scrollTo({
@@ -1442,7 +1477,6 @@ const firebaseConfig = {
         });
 
         setStatus("friendsStatus", "Friend request sent.", "success");
-
         await searchUsers({ preventDefault() {} });
       } catch (error) {
         console.error(error);
@@ -1765,10 +1799,151 @@ const firebaseConfig = {
             thumbnail.src = data.thumbnail_url;
           }
         })
-        .catch(() => {
-          // The thumbnail and basic preview remain available.
-        });
+        .catch(() => {});
     }
+
+    /* Timestamps and message receipts */
+
+    function formatMessageTime(timestamp) {
+      if (!timestamp || typeof timestamp.toDate !== "function") {
+        return "";
+      }
+
+      return timestamp.toDate().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit"
+      });
+    }
+
+    function addMessageMeta(row, data, mine) {
+      const meta = document.createElement("div");
+      meta.className = "message-meta";
+
+      const time = document.createElement("span");
+      time.className = "message-time";
+      time.textContent = formatMessageTime(data.createdAt) || "Sending...";
+      meta.appendChild(time);
+
+      if (mine && activeFriendId) {
+        const receipt = document.createElement("span");
+        receipt.className = "message-receipt";
+
+        const deliveredTo = Array.isArray(data.deliveredTo)
+          ? data.deliveredTo
+          : [];
+
+        const readBy = Array.isArray(data.readBy)
+          ? data.readBy
+          : [];
+
+        if (readBy.includes(activeFriendId)) {
+          receipt.textContent = "Read";
+          receipt.classList.add("read");
+        } else if (deliveredTo.includes(activeFriendId)) {
+          receipt.textContent = "Delivered";
+        } else {
+          receipt.textContent = "Sent";
+        }
+
+        meta.appendChild(receipt);
+      }
+
+      row.appendChild(meta);
+    }
+
+    /*
+      The recipient marks incoming messages as delivered when they arrive
+      in the open conversation. Messages are marked read only while the
+      conversation is visible on screen.
+    */
+
+    async function updateIncomingReceipts(docs, chatId) {
+      if (!currentUser || activeChatId !== chatId) return;
+
+      const uid = currentUser.uid;
+      const shouldMarkRead = document.visibilityState === "visible";
+
+      for (const doc of docs) {
+        const data = doc.data();
+
+        if (!data.senderId || data.senderId === uid) continue;
+
+        const deliveredTo = Array.isArray(data.deliveredTo)
+          ? data.deliveredTo
+          : [];
+
+        const readBy = Array.isArray(data.readBy)
+          ? data.readBy
+          : [];
+
+        const needsDelivery = !deliveredTo.includes(uid);
+        const needsRead = shouldMarkRead && !readBy.includes(uid);
+
+        if (!needsDelivery && !needsRead) continue;
+
+        const key = chatId + "/" + doc.id + "/" + uid;
+
+        if (receiptUpdates.has(key)) continue;
+        receiptUpdates.add(key);
+
+        try {
+          const changes = {};
+
+          if (needsDelivery) {
+            changes.deliveredTo = arrayUnion(uid);
+            changes.deliveredAt = serverTimestamp();
+          }
+
+          if (needsRead) {
+            changes.readBy = arrayUnion(uid);
+            changes.readAt = serverTimestamp();
+          }
+
+          await db.collection("chats")
+            .doc(chatId)
+            .collection("messages")
+            .doc(doc.id)
+            .update(changes);
+        } catch (error) {
+          console.error("Could not update message receipt:", error);
+        } finally {
+          receiptUpdates.delete(key);
+        }
+      }
+    }
+
+    async function markVisibleMessagesRead() {
+      const chatId = activeChatId;
+
+      if (
+        !currentUser ||
+        !chatId ||
+        document.visibilityState !== "visible"
+      ) {
+        return;
+      }
+
+      try {
+        const snapshot = await db.collection("chats")
+          .doc(chatId)
+          .collection("messages")
+          .orderBy("createdAt", "asc")
+          .limitToLast(100)
+          .get();
+
+        if (activeChatId !== chatId) return;
+
+        await updateIncomingReceipts(snapshot.docs, chatId);
+      } catch (error) {
+        console.error("Could not mark messages as read:", error);
+      }
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        markVisibleMessagesRead();
+      }
+    });
 
     /* Render saved messages */
 
@@ -1834,6 +2009,8 @@ const firebaseConfig = {
 
         addYouTubePreview(row, data.text || "");
       }
+
+      addMessageMeta(row, data, mine);
 
       if (mine) {
         row.appendChild(makeDeleteButton(chatId, doc.id));
@@ -1926,6 +2103,8 @@ const firebaseConfig = {
               snapshot.docs.forEach(doc => {
                 messages.appendChild(renderMessage(doc, friendName, chatId));
               });
+
+              updateIncomingReceipts(snapshot.docs, chatId);
             }
 
             renderTypingBubble();
@@ -1999,7 +2178,9 @@ const firebaseConfig = {
           senderId: currentUser.uid,
           senderUsername: currentProfile.username,
           text,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          deliveredTo: [],
+          readBy: []
         });
 
         await chatRef.update({
@@ -2148,6 +2329,8 @@ const firebaseConfig = {
           senderUsername: currentProfile.username,
           text: caption,
           createdAt: serverTimestamp(),
+          deliveredTo: [],
+          readBy: [],
           mediaType,
           mediaUrl: result.secure_url,
           mediaName: file.name.slice(0, 255)
