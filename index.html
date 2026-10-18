@@ -69,28 +69,61 @@ main{min-width:0;min-height:100vh;display:flex;flex-direction:column}
 .chat-header-name{font-weight:600}
 .chat-header-subtitle{color:var(--muted);font-size:12px;margin-top:4px;min-height:14px}
 .messages{flex:1;min-height:0;overflow-y:auto;padding:22px 24px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth;overscroll-behavior:contain}
-.message-row{display:flex;flex-direction:column;align-items:flex-start;max-width:78%;animation:messageIn .22s ease both;position:relative;min-width:0}
-.message-row.mine{align-self:flex-end;align-items:flex-end}
+
+/* Message alignment */
+.message-row{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  width:fit-content;
+  max-width:78%;
+  min-width:0;
+  animation:messageIn .22s ease both;
+  position:relative;
+}
+.message-row.mine{
+  align-self:flex-end;
+  margin-left:auto;
+  align-items:flex-end;
+}
 .message-author{font-size:11px;color:var(--muted);margin:0 8px 5px}
 .message-bubble{background:var(--incoming);padding:10px 13px;border-radius:14px 14px 14px 4px;overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.45;max-width:100%}
 .mine .message-bubble{background:var(--blue);color:white;border-radius:14px 14px 4px 14px}
 
-/* Image alignment fix */
-.message-row > a{
+/* Image messages stay on the sender's side */
+.message-image-link{
   display:block;
   width:fit-content;
   max-width:100%;
-  flex:0 1 auto;
   align-self:flex-start;
+  margin:0;
+  padding:0;
   line-height:0;
+  flex-shrink:1;
 }
-.message-row.mine > a{
+.message-row.mine .message-image-link{
   align-self:flex-end;
+  margin-left:auto;
+  margin-right:0;
 }
-.message-row:not(.mine) > a{
+.message-row:not(.mine) .message-image-link{
   align-self:flex-start;
+  margin-left:0;
+  margin-right:auto;
 }
-.message-media{display:block;width:auto;max-width:min(100%,380px);max-height:420px;border-radius:10px;object-fit:contain;background:#080808}
+.message-media{
+  display:block;
+  width:auto;
+  max-width:100%;
+  max-height:420px;
+  border-radius:10px;
+  object-fit:contain;
+  background:#080808;
+}
+.message-image-link .message-media{
+  max-width:min(100%,380px);
+  height:auto;
+}
 video.message-media{width:100%;height:auto}
 .message-caption{margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45;max-width:100%}
 .message-actions{position:absolute;right:100%;bottom:0;display:flex;padding-right:8px;opacity:0;pointer-events:none;transition:opacity .15s}
@@ -132,6 +165,7 @@ aside{min-height:auto;padding:14px;border-right:0;border-bottom:1px solid var(--
 .item-actions button{padding:9px}
 .message-row{max-width:88%}
 .message-media{max-width:100%;max-height:320px}
+.message-image-link .message-media{max-width:min(100%,380px)}
 .upload-track{margin-left:12px;margin-right:12px}
 }
 </style>
@@ -219,7 +253,7 @@ aside{min-height:auto;padding:14px;border-right:0;border-bottom:1px solid var(--
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 const firebaseConfig={
-  apiKey:"AIzaSyAoD77U3rLamAjvefmT06-ByrZHkBlK7qo",
+  apiKey:"AIzaSyAoD77U3rLamAjvefmT06-ByYRkBlK7qo",
   authDomain:"celio-404aa.firebaseapp.com",
   projectId:"celio-404aa",
   storageBucket:"celio-404aa.firebasestorage.app",
@@ -480,38 +514,59 @@ function makeDeleteButton(chatId,messageId){
 }
 function renderMessage(doc,friendName,chatId){
   const data=doc.data(),mine=data.senderId===currentUser.uid;
-  const row=document.createElement("div");row.className="message-row"+(mine?" mine":"");
+  const row=document.createElement("div");
+  row.className="message-row"+(mine?" mine":"");
+
   if(!mine){
-    const author=document.createElement("div");author.className="message-author";
-    author.textContent=data.senderUsername||friendName||"Friend";row.appendChild(author);
+    const author=document.createElement("div");
+    author.className="message-author";
+    author.textContent=data.senderUsername||friendName||"Friend";
+    row.appendChild(author);
   }
+
   if(data.mediaUrl&&(data.mediaType==="image"||data.mediaType==="video")){
     if(data.mediaType==="image"){
       const image=document.createElement("img");
-      image.className="message-media";image.src=data.mediaUrl;
-      image.alt=data.mediaName||"Image";image.loading="lazy";
-      image.addEventListener("error",()=>{image.alt="This image could not be loaded"});
+      image.className="message-media";
+      image.src=data.mediaUrl;
+      image.alt=data.mediaName||"Image";
+      image.loading="lazy";
+
+      image.addEventListener("error",()=>{
+        image.alt="This image could not be loaded";
+      });
+
       const link=document.createElement("a");
-      link.href=data.mediaUrl;link.target="_blank";link.rel="noopener noreferrer";
+      link.className="message-image-link";
+      link.href=data.mediaUrl;
+      link.target="_blank";
+      link.rel="noopener noreferrer";
       link.appendChild(image);
       row.appendChild(link);
     }else{
       const video=document.createElement("video");
-      video.className="message-media";video.src=data.mediaUrl;
-      video.controls=true;video.preload="metadata";video.playsInline=true;
+      video.className="message-media";
+      video.src=data.mediaUrl;
+      video.controls=true;
+      video.preload="metadata";
+      video.playsInline=true;
       video.setAttribute("aria-label",data.mediaName||"Shared video");
       row.appendChild(video);
     }
+
     if(data.text){
       const caption=document.createElement("div");
-      caption.className="message-caption";caption.textContent=data.text;
+      caption.className="message-caption";
+      caption.textContent=data.text;
       row.appendChild(caption);
     }
   }else{
     const bubble=document.createElement("div");
-    bubble.className="message-bubble";bubble.textContent=data.text||"";
+    bubble.className="message-bubble";
+    bubble.textContent=data.text||"";
     row.appendChild(bubble);
   }
+
   if(mine)row.appendChild(makeDeleteButton(chatId,doc.id));
   return row;
 }
