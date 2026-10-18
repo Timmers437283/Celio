@@ -49,7 +49,10 @@
     .auth-switch { margin-top: 20px; color: var(--muted); text-align: center; }
     .text-button { padding: 4px; background: transparent; color: var(--blue); }
 
-    .app { min-height: 100vh; display: grid; grid-template-columns: 250px minmax(0, 1fr); }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 250px minmax(0, 1fr); transition: grid-template-columns .2s ease; }
+    .app.menu-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+    .app.menu-collapsed aside { display: none; }
+    .menu-backdrop { display: none; }
     aside { min-height: 100vh; padding: 24px 16px; display: flex; flex-direction: column; gap: 22px; border-right: 1px solid var(--border); }
     .sidebar-brand { padding: 0 10px; font-size: 23px; font-weight: 700; letter-spacing: -1px; }
     .section-label { margin: 0 10px 10px; color: #777; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
@@ -59,7 +62,11 @@
     .account-name { padding: 0 4px; font-weight: 600; overflow-wrap: anywhere; }
     .account-id { padding: 5px 4px 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
     main { min-width: 0; min-height: 100vh; display: flex; flex-direction: column; }
-    .topbar { height: 70px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); }
+    .topbar { height: 70px; padding: 0 28px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); }
+    .menu-toggle { width: 40px; height: 40px; flex-shrink: 0; display: grid; place-items: center; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 9px; }
+    .menu-toggle:hover { background: #202020; border-color: var(--border); }
+    .menu-toggle svg { width: 21px; height: 21px; }
+    .topbar h1 { flex: 1; }
     .topbar h1 { margin: 0; font-size: 17px; font-weight: 600; }
     .content { width: 100%; max-width: 900px; margin: 0 auto; padding: 28px; }
     .page-heading { margin: 0 0 8px; font-size: 24px; letter-spacing: -.5px; }
@@ -77,6 +84,8 @@
     .item-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
     .empty { padding: 28px 16px; color: var(--muted); text-align: center; line-height: 1.5; border: 1px dashed #303030; border-radius: 10px; }
     .subheading { margin: 28px 0 12px; font-size: 15px; font-weight: 600; }
+    .settings-card { max-width: 520px; padding: 20px; background: #101010; border: 1px solid var(--border); border-radius: 12px; }
+    .settings-card .field { margin-top: 18px; }
 
     .chat-panel { height: calc(100vh - 70px); min-height: 350px; display: flex; flex-direction: column; }
     .chat-header { padding: 15px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
@@ -132,14 +141,17 @@
     @keyframes messageIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
     @media (max-width: 650px) {
-      .app { grid-template-columns: 1fr; }
-      aside { min-height: auto; padding: 14px; gap: 12px; border-right: 0; border-bottom: 1px solid var(--border); }
-      .sidebar-brand { padding: 0 4px; }
-      .sidebar-nav { display: flex; flex-wrap: wrap; gap: 4px; }
-      .nav-button { width: auto; margin: 0; padding: 9px 10px; }
-      .section-label { display: none; }
-      .sidebar-bottom { margin-top: 0; padding-top: 12px; }
-      .topbar { height: 58px; padding: 0 18px; }
+      .app, .app.menu-collapsed { grid-template-columns: 1fr; }
+      .app aside { position: fixed; top: 0; bottom: 0; left: 0; z-index: 31; width: min(290px, 86vw); min-height: 100dvh; padding: 22px 16px; gap: 22px; background: var(--bg); border-right: 1px solid var(--border); border-bottom: 0; transform: translateX(-105%); transition: transform .2s ease; }
+      .app.menu-open aside { transform: translateX(0); }
+      .menu-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.62); }
+      .app.menu-open .menu-backdrop { display: block; }
+      .sidebar-brand { padding: 0 10px; }
+      .sidebar-nav { display: flex; flex-direction: column; gap: 4px; }
+      .nav-button { width: 100%; margin: 0; padding: 11px 10px; }
+      .section-label { display: block; }
+      .sidebar-bottom { margin-top: auto; padding-top: 16px; }
+      .topbar { height: 58px; padding: 0 12px; gap: 10px; }
       .content { padding: 22px 16px; }
       .chat-panel { height: 65vh; min-height: 380px; }
       .chat-header { padding: 13px 16px; }
@@ -154,6 +166,66 @@
       .youtube-preview { max-width: min(100%, 300px); }
       .upload-track { margin-right: 12px; margin-left: 12px; }
     }
+
+    /* Right-side overlay workspace menu */
+    .app { display: block; }
+    .app > aside,
+    .app.menu-collapsed > aside {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: auto;
+      z-index: 41;
+      width: 250px;
+      max-width: 86vw;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 24px 16px;
+      gap: 22px;
+      overflow-y: auto;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      border-right: 0;
+      border-bottom: 0;
+      transform: translateX(105%);
+      transition: transform .2s ease;
+      display: flex;
+    }
+    .app.menu-open > aside { transform: translateX(0); }
+    .menu-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: block;
+      background: rgba(0, 0, 0, .62);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity .2s ease, visibility .2s ease;
+    }
+    .app.menu-open > .menu-backdrop {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+    .topbar { justify-content: space-between; }
+    .topbar h1 { flex: 0 1 auto; }
+    .menu-toggle { order: 2; margin-left: auto; }
+    @media (max-width: 650px) {
+      .app, .app.menu-collapsed { display: block; }
+      .app > aside, .app.menu-collapsed > aside { width: 250px; max-width: 86vw; }
+      .topbar { justify-content: space-between; }
+      .topbar h1 { flex: 0 1 auto; }
+      .menu-toggle { order: 2; margin-left: auto; }
+    }
+    .username-editor { display: flex; align-items: stretch; gap: 8px; width: 100%; }
+    .username-editor input { flex: 1; width: 0; min-width: 0; }
+    .username-save { flex-shrink: 0; min-width: 76px; padding: 0 18px; background: #252525; color: #777; border-radius: 8px; font-weight: 600; }
+    .username-save:disabled { background: #252525; color: #777; opacity: 1; cursor: not-allowed; }
+    .username-save:not(:disabled) { background: var(--blue); color: white; cursor: pointer; }
+    .username-save:not(:disabled):hover { background: #3195ff; }
+    #settingsStatus { margin-top: 12px; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -188,13 +260,15 @@
   </section>
 
   <section id="appScreen" class="app hidden">
-    <aside>
+    <button id="menuBackdrop" class="menu-backdrop" type="button" aria-label="Close navigation menu" tabindex="-1"></button>
+    <aside id="appSidebar">
       <div class="sidebar-brand">Celio</div>
       <div>
         <div class="section-label">Workspace</div>
         <div class="sidebar-nav">
           <button class="nav-button active" data-page="friends">Friends</button>
           <button class="nav-button" data-page="requests">Requests</button>
+          <button class="nav-button" data-page="settings">Settings</button>
         </div>
       </div>
       <div class="sidebar-bottom">
@@ -205,8 +279,10 @@
     </aside>
     <main>
       <header class="topbar">
+        <button id="menuToggle" class="menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="appSidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
         <h1 id="topbarTitle">Friends</h1>
-        <span class="muted">Celio</span>
       </header>
       <section id="friendsPage" class="content">
         <h2 class="page-heading">Friends</h2>
@@ -225,6 +301,21 @@
         <p class="page-description">Manage requests you've received.</p>
         <div id="requestsList" class="list"><div class="empty">Loading requests...</div></div>
         <p id="requestsStatus" class="status" aria-live="polite"></p>
+      </section>
+      <section id="settingsPage" class="content hidden">
+        <h2 class="page-heading">Settings</h2>
+        <p class="page-description">Manage your Celio account details.</p>
+        <div class="settings-card">
+          <h3 class="subheading" style="margin-top:0">Display name</h3>
+          <p class="muted" style="line-height:1.5;margin:0 0 18px">Change the username other people see on Celio. Usernames must be 3–24 characters and can use letters, numbers, and underscores.</p>
+          <form id="changeNameForm">
+            <div class="username-editor">
+              <input id="newUsernameInput" maxlength="24" autocomplete="off" required placeholder="Type username here" aria-label="New username" aria-describedby="settingsStatus">
+              <button id="saveUsernameButton" class="primary username-save" type="submit" disabled>Save</button>
+            </div>
+          </form>
+          <p id="settingsStatus" class="status" aria-live="polite"></p>
+        </div>
       </section>
       <section id="chatPage" class="hidden">
         <div class="chat-panel">
@@ -547,8 +638,13 @@
       closeActiveChat();
       $("friendsPage").classList.toggle("hidden", page !== "friends");
       $("requestsPage").classList.toggle("hidden", page !== "requests");
+      $("settingsPage").classList.toggle("hidden", page !== "settings");
       $("chatPage").classList.add("hidden");
-      $("topbarTitle").textContent = page === "friends" ? "Friends" : "Requests";
+      $("topbarTitle").textContent = page === "friends" ? "Friends" : page === "requests" ? "Requests" : "Settings";
+      if (page === "settings" && currentProfile) {
+        $("newUsernameInput").value = currentProfile.username || "";
+        updateUsernameEditor();
+      }
 
       document.querySelectorAll("[data-page]").forEach(button => {
         button.classList.toggle("active", button.dataset.page === page);
@@ -558,6 +654,7 @@
     function showChatPanel() {
       $("friendsPage").classList.add("hidden");
       $("requestsPage").classList.add("hidden");
+      $("settingsPage").classList.add("hidden");
       $("chatPage").classList.remove("hidden");
       $("topbarTitle").textContent = "Messages";
       document.querySelectorAll("[data-page]").forEach(button => button.classList.remove("active"));
@@ -1621,6 +1718,137 @@
 
     $("friendSearchForm").addEventListener("submit", searchUsers);
     $("messageForm").addEventListener("submit", sendMessage);
+
+    const usernameInput = $("newUsernameInput");
+    const saveUsernameButton = $("saveUsernameButton");
+
+    function validateUsername(username) {
+      if (username.length < 3 || username.length > 24) {
+        return "Username must be between 3-24 characters!";
+      }
+
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        return "Username can only use letters, numbers, or _";
+      }
+
+      if (username.endsWith("_")) {
+        return "Username cannot end in _";
+      }
+
+      return "";
+    }
+
+    function updateUsernameEditor() {
+      const username = usernameInput.value.trim();
+      const originalUsername = currentProfile?.username || "";
+      const changed = username !== originalUsername;
+      const validationError = validateUsername(username);
+
+      saveUsernameButton.disabled =
+        !currentUser ||
+        !currentProfile ||
+        !changed ||
+        Boolean(validationError);
+
+      if (!changed) {
+        setStatus("settingsStatus", "");
+      } else if (validationError) {
+        setStatus("settingsStatus", validationError, "error");
+      } else {
+        setStatus("settingsStatus", "");
+      }
+    }
+
+    usernameInput.addEventListener("input", updateUsernameEditor);
+
+    $("changeNameForm").addEventListener("submit", async event => {
+      event.preventDefault();
+
+      if (!currentUser || !currentProfile) return;
+
+      const username = usernameInput.value.trim();
+      const lower = usernameKey(username);
+      const originalUsername = currentProfile.username || "";
+
+      if (username === originalUsername) {
+        saveUsernameButton.disabled = true;
+        setStatus("settingsStatus", "");
+        return;
+      }
+
+      const validationError = validateUsername(username);
+      if (validationError) {
+        setStatus("settingsStatus", validationError, "error");
+        updateUsernameEditor();
+        return;
+      }
+
+      saveUsernameButton.disabled = true;
+      usernameInput.disabled = true;
+      setStatus("settingsStatus", "Checking username...");
+
+      try {
+        const matching = await db.collection("users")
+          .where("usernameLower", "==", lower)
+          .limit(2)
+          .get();
+
+        const usernameIsTaken = matching.docs.some(
+          doc => doc.id !== currentUser.uid
+        );
+
+        if (usernameIsTaken) {
+          setStatus("settingsStatus", "Username already in use!", "error");
+          return;
+        }
+
+        const batch = db.batch();
+        batch.update(db.collection("users").doc(currentUser.uid), {
+          username,
+          usernameLower: lower,
+          updatedAt: serverTimestamp()
+        });
+
+        const contacts = await db.collection("friends")
+          .doc(currentUser.uid)
+          .collection("contacts")
+          .get();
+
+        contacts.forEach(contact => {
+          batch.set(
+            db.collection("friends")
+              .doc(contact.id)
+              .collection("contacts")
+              .doc(currentUser.uid),
+            { username },
+            { merge: true }
+          );
+        });
+
+        await batch.commit();
+
+        currentProfile = {
+          ...currentProfile,
+          username,
+          usernameLower: lower
+        };
+
+        $("accountName").textContent = username;
+        usernameInput.value = username;
+        setStatus("settingsStatus", "Username updated successfully.", "success");
+      } catch (error) {
+        console.error("Username update error:", error);
+        setStatus("settingsStatus", friendlyError(error), "error");
+      } finally {
+        usernameInput.disabled = false;
+        const finalUsername = usernameInput.value.trim();
+        saveUsernameButton.disabled =
+          !currentUser ||
+          !currentProfile ||
+          finalUsername === (currentProfile?.username || "") ||
+          Boolean(validateUsername(finalUsername));
+      }
+    });
     $("messageInput").addEventListener("input", handleTypingInput);
 
     $("attachButton").addEventListener("click", () => {
@@ -1636,6 +1864,7 @@
     $("backToFriends").addEventListener("click", () => {
       closeActiveChat();
       showPage("friends");
+      closeNavigationMenu();
     });
 
     $("signOutButton").addEventListener("click", async () => {
@@ -1644,8 +1873,32 @@
       await auth.signOut();
     });
 
+    const menuToggle = $("menuToggle");
+    const menuBackdrop = $("menuBackdrop");
+    const appScreen = $("appScreen");
+
+    function closeNavigationMenu() {
+      appScreen.classList.remove("menu-open");
+      menuToggle.setAttribute("aria-expanded", "false");
+      menuToggle.setAttribute("aria-label", "Open navigation menu");
+    }
+
+    menuToggle.addEventListener("click", () => {
+      const isOpen = appScreen.classList.toggle("menu-open");
+      menuToggle.setAttribute("aria-expanded", String(isOpen));
+      menuToggle.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+    });
+
+    menuBackdrop.addEventListener("click", closeNavigationMenu);
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") closeNavigationMenu();
+    });
+
     document.querySelectorAll("[data-page]").forEach(button => {
-      button.addEventListener("click", () => showPage(button.dataset.page));
+      button.addEventListener("click", () => {
+        showPage(button.dataset.page);
+        closeNavigationMenu();
+      });
     });
 
     /* Restore signed-in session */
