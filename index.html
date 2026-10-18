@@ -396,6 +396,37 @@
       border-radius: 14px 14px 4px 14px;
     }
 
+    .message-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+      min-height: 22px;
+      opacity: .65;
+      transition: opacity .15s;
+    }
+
+    .message-row:hover .message-actions,
+    .message-row:focus-within .message-actions {
+      opacity: 1;
+    }
+
+    .delete-message-button {
+      background: transparent;
+      color: #ff7777;
+      font-size: 11px;
+      padding: 4px 7px;
+      border-radius: 5px;
+    }
+
+    .delete-message-button:hover {
+      background: #291414;
+    }
+
+    .delete-message-button:disabled {
+      opacity: .5;
+      cursor: wait;
+    }
+
     .composer {
       display: flex;
       align-items: center;
@@ -638,7 +669,7 @@
 
   <script>
     const firebaseConfig = {
-      apiKey: "AIzaSyAoD77U3rLamAjvefmT06-ByrZHkBlK7qo",
+      apiKey: "AIzaSyAoD77U3rLamAjvefmT06-ByYRhkB7Kqo",
       authDomain: "celio-404aa.firebaseapp.com",
       projectId: "celio-404aa",
       storageBucket: "celio-404aa.firebasestorage.app",
@@ -669,6 +700,7 @@
     let requestsCache = [];
     let sendingMessage = false;
     let friendIsTyping = false;
+    const deletingMessages = new Set();
 
     const $ = id => document.getElementById(id);
 
@@ -1209,6 +1241,52 @@
       }
     }
 
+    async function deleteMessage(chatId, messageId, button) {
+      if (!currentUser || activeChatId !== chatId) return;
+
+      const deletionKey = chatId + "/" + messageId;
+      if (deletingMessages.has(deletionKey)) return;
+
+      const confirmed = window.confirm(
+        "Delete this message? This action cannot be undone."
+      );
+
+      if (!confirmed) return;
+
+      deletingMessages.add(deletionKey);
+      button.disabled = true;
+      button.textContent = "Deleting...";
+
+      try {
+        const messageRef = db.collection("chats")
+          .doc(chatId)
+          .collection("messages")
+          .doc(messageId);
+
+        const snapshot = await messageRef.get();
+
+        if (!snapshot.exists) {
+          setStatus("chatStatus", "This message has already been deleted.", "error");
+          return;
+        }
+
+        if (snapshot.data().senderId !== currentUser.uid) {
+          setStatus("chatStatus", "You can only delete your own messages.", "error");
+          return;
+        }
+
+        if (activeChatId !== chatId) return;
+
+        await messageRef.delete();
+        setStatus("chatStatus", "Message deleted.", "success");
+      } catch (error) {
+        console.error("Delete message error:", error);
+        setStatus("chatStatus", friendlyError(error), "error");
+      } finally {
+        deletingMessages.delete(deletionKey);
+      }
+    }
+
     async function openChat(friendId, friendName) {
       closeActiveChat();
       showChatPanel();
@@ -1303,6 +1381,25 @@
                 bubble.className = "message-bubble";
                 bubble.textContent = data.text || "";
                 row.appendChild(bubble);
+
+                if (mine) {
+                  const actions = document.createElement("div");
+                  actions.className = "message-actions";
+
+                  const deleteButton = document.createElement("button");
+                  deleteButton.type = "button";
+                  deleteButton.className = "delete-message-button";
+                  deleteButton.textContent = "Delete";
+                  deleteButton.setAttribute("aria-label", "Delete your message");
+
+                  deleteButton.addEventListener("click", () => {
+                    deleteMessage(chatId, doc.id, deleteButton);
+                  });
+
+                  actions.appendChild(deleteButton);
+                  row.appendChild(actions);
+                }
+
                 messages.appendChild(row);
               });
             }
@@ -1311,6 +1408,7 @@
 
             if (wasNearBottom || friendIsTyping) {
               requestAnimationFrame(() => {
+                if (activeChatId !== chatId) return;
                 messages.scrollTo({
                   top: messages.scrollHeight,
                   behavior: "smooth"
