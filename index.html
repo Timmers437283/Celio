@@ -75,7 +75,33 @@
     .search-row input { min-width: 0; }
     .list { display: flex; flex-direction: column; gap: 8px; }
     .list-item { min-width: 0; padding: 14px; display: flex; align-items: center; gap: 13px; border: 1px solid var(--border); border-radius: 10px; }
-    .avatar { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; background: #202020; color: #d9eaff; border-radius: 50%; font-size: 16px; font-weight: 600; }
+    .avatar { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; overflow: hidden; background: #202020; color: #d9eaff; border-radius: 50%; font-size: 16px; font-weight: 600; object-fit: cover; }
+    button.avatar { padding: 0; border: 1px solid #303030; cursor: pointer; }
+    button.avatar:hover { border-color: #777; }
+    .account-profile-button { display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 12px; padding: 8px; background: transparent; color: var(--text); text-align: left; border: 1px solid var(--border); border-radius: 10px; }
+    .account-profile-button:hover { background: #1a1a1a; }
+    .account-profile-copy { min-width: 0; flex: 1; }
+    .account-profile-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .account-profile-copy span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .profile-picture-row { display: flex; align-items: center; gap: 18px; margin: 18px 0 24px; }
+    .profile-picture-large { width: 92px; height: 92px; font-size: 32px; }
+    .profile-picture-copy { color: var(--muted); line-height: 1.5; }
+    .profile-picture-copy strong { display: block; margin-bottom: 4px; color: var(--text); }
+    .crop-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.76); }
+    .crop-modal.hidden { display: none; }
+    .crop-dialog { width: min(100%, 430px); max-height: min(92dvh, 760px); overflow-y: auto; padding: 22px; background: #111; border: 1px solid #303030; border-radius: 16px; box-shadow: 0 24px 80px rgba(0,0,0,.4); }
+    .crop-dialog h2 { margin: 0 0 7px; font-size: 20px; }
+    .crop-dialog p { margin: 0 0 18px; color: var(--muted); line-height: 1.5; }
+    .crop-stage { width: min(100%, 300px); aspect-ratio: 1; margin: 0 auto 18px; position: relative; overflow: hidden; border-radius: 50%; background: #252525; touch-action: none; cursor: grab; }
+    .crop-stage:active { cursor: grabbing; }
+    #cropImage { position: absolute; max-width: none; max-height: none; width: auto; height: auto; user-select: none; pointer-events: none; }
+    .crop-stage::after { content: ""; position: absolute; inset: 0; border: 2px solid rgba(255,255,255,.85); border-radius: 50%; pointer-events: none; }
+    .crop-controls { margin-bottom: 18px; }
+    .crop-controls label { display: block; margin-bottom: 9px; color: #ddd; }
+    .crop-controls input[type=range] { padding: 0; accent-color: var(--blue); }
+    .crop-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .crop-actions button { padding: 11px 15px; border-radius: 8px; }
+    .crop-status { min-height: 18px; margin-top: 12px; color: var(--muted); font-size: 12px; }
     .person-info { min-width: 0; flex: 1; }
     .person-name { min-width: 0; display: flex; align-items: center; gap: 8px; font-weight: 600; overflow-wrap: anywhere; }
     .person-name-text { min-width: 0; overflow-wrap: anywhere; }
@@ -219,13 +245,6 @@
       .topbar h1 { flex: 0 1 auto; }
       .menu-toggle { order: 2; margin-left: auto; }
     }
-    .username-editor { display: flex; align-items: stretch; gap: 8px; width: 100%; }
-    .username-editor input { flex: 1; width: 0; min-width: 0; }
-    .username-save { flex-shrink: 0; min-width: 76px; padding: 0 18px; background: #252525; color: #777; border-radius: 8px; font-weight: 600; }
-    .username-save:disabled { background: #252525; color: #777; opacity: 1; cursor: not-allowed; }
-    .username-save:not(:disabled) { background: var(--blue); color: white; cursor: pointer; }
-    .username-save:not(:disabled):hover { background: #3195ff; }
-    #settingsStatus { margin-top: 12px; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -268,11 +287,14 @@
         <div class="sidebar-nav">
           <button class="nav-button active" data-page="friends">Friends</button>
           <button class="nav-button" data-page="requests">Requests</button>
-          <button class="nav-button" data-page="settings">Settings</button>
+          <button class="nav-button" data-page="settings">Profile</button>
         </div>
       </div>
       <div class="sidebar-bottom">
-        <div id="accountName" class="account-name"></div>
+        <button id="accountProfileButton" class="account-profile-button" type="button" aria-label="Open your profile">
+          <div class="avatar" id="accountAvatar">?</div>
+          <div class="account-profile-copy"><strong id="accountName">Celio user</strong><span>View profile</span></div>
+        </button>
         <div id="accountId" class="account-id"></div>
         <button id="signOutButton" class="nav-button">Sign out</button>
       </div>
@@ -303,16 +325,25 @@
         <p id="requestsStatus" class="status" aria-live="polite"></p>
       </section>
       <section id="settingsPage" class="content hidden">
-        <h2 class="page-heading">Settings</h2>
-        <p class="page-description">Manage your Celio account details.</p>
+        <h2 class="page-heading">Your profile</h2>
+        <p class="page-description">Change how you appear to other people on Celio.</p>
         <div class="settings-card">
-          <h3 class="subheading" style="margin-top:0">Display name</h3>
+          <h3 class="subheading" style="margin-top:0">Profile picture</h3>
+          <div class="profile-picture-row">
+            <button type="button" class="avatar profile-picture-large" id="profileAvatarButton" aria-label="Choose profile picture">?</button>
+            <div class="profile-picture-copy"><strong>Make it yours</strong>Choose a photo, then drag and zoom to fit it inside the circle.</div>
+          </div>
+          <input id="profilePictureInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp">
+          <button type="button" id="chooseProfilePictureButton" class="secondary">Choose a picture</button>
+          <p id="pictureStatus" class="status" aria-live="polite"></p>
+          <h3 class="subheading">Username</h3>
           <p class="muted" style="line-height:1.5;margin:0 0 18px">Change the username other people see on Celio. Usernames must be 3–24 characters and can use letters, numbers, and underscores.</p>
           <form id="changeNameForm">
-            <div class="username-editor">
-              <input id="newUsernameInput" maxlength="24" autocomplete="off" required placeholder="Type username here" aria-label="New username" aria-describedby="settingsStatus">
-              <button id="saveUsernameButton" class="primary username-save" type="submit" disabled>Save</button>
+            <div class="field">
+              <label for="newUsernameInput">Username</label>
+              <input id="newUsernameInput" maxlength="24" autocomplete="off" required placeholder="Enter a new username">
             </div>
+            <button id="saveUsernameButton" class="primary" type="submit">Save changes</button>
           </form>
           <p id="settingsStatus" class="status" aria-live="polite"></p>
         </div>
@@ -342,6 +373,17 @@
       </section>
     </main>
   </section>
+
+  <div id="cropModal" class="crop-modal hidden" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+    <div class="crop-dialog">
+      <h2 id="cropTitle">Adjust profile picture</h2>
+      <p>Drag the image to reposition it. Use the slider to zoom in or out.</p>
+      <div id="cropStage" class="crop-stage"><img id="cropImage" alt="Image crop preview"></div>
+      <div class="crop-controls"><label for="cropZoom">Zoom</label><input id="cropZoom" type="range" min="1" max="3" step="0.01" value="1"></div>
+      <div class="crop-actions"><button type="button" id="cancelCropButton" class="secondary">Cancel</button><button type="button" id="saveCropButton" class="primary">Use picture</button></div>
+      <div id="cropStatus" class="crop-status" aria-live="polite"></div>
+    </div>
+  </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
@@ -640,10 +682,10 @@
       $("requestsPage").classList.toggle("hidden", page !== "requests");
       $("settingsPage").classList.toggle("hidden", page !== "settings");
       $("chatPage").classList.add("hidden");
-      $("topbarTitle").textContent = page === "friends" ? "Friends" : page === "requests" ? "Requests" : "Settings";
+      $("topbarTitle").textContent = page === "friends" ? "Friends" : page === "requests" ? "Requests" : "Profile";
       if (page === "settings" && currentProfile) {
         $("newUsernameInput").value = currentProfile.username || "";
-        updateUsernameEditor();
+        renderAvatarInto($("profileAvatarButton"), currentProfile);
       }
 
       document.querySelectorAll("[data-page]").forEach(button => {
@@ -671,11 +713,47 @@
       box.appendChild(element);
     }
 
-    function makeAvatar(name) {
+    function makeAvatar(profileOrName, extraClass = "") {
+      const profile = profileOrName && typeof profileOrName === "object" ? profileOrName : { username: profileOrName };
       const element = document.createElement("div");
-      element.className = "avatar";
-      element.textContent = String(name || "?").trim().charAt(0).toUpperCase() || "?";
+      element.className = "avatar" + (extraClass ? " " + extraClass : "");
+      if (profile.avatarUrl) {
+        const image = document.createElement("img");
+        image.src = profile.avatarUrl;
+        image.alt = "";
+        image.loading = "lazy";
+        image.className = "avatar";
+        image.style.width = "100%";
+        image.style.height = "100%";
+        image.addEventListener("error", () => {
+          element.replaceChildren();
+          element.textContent = String(profile.username || "?").trim().charAt(0).toUpperCase() || "?";
+        });
+        element.appendChild(image);
+      } else {
+        element.textContent = String(profile.username || "?").trim().charAt(0).toUpperCase() || "?";
+      }
       return element;
+    }
+
+    function renderAvatarInto(element, profile) {
+      if (!element) return;
+      element.replaceChildren();
+      element.className = element.className.split(" ").filter(name => name !== "has-image").join(" ");
+      if (profile?.avatarUrl) {
+        const image = document.createElement("img");
+        image.src = profile.avatarUrl;
+        image.alt = "";
+        image.className = "avatar";
+        image.style.width = "100%";
+        image.style.height = "100%";
+        image.addEventListener("error", () => {
+          element.replaceChildren(document.createTextNode(String(profile.username || "?").trim().charAt(0).toUpperCase() || "?"));
+        });
+        element.appendChild(image);
+      } else {
+        element.textContent = String(profile?.username || "?").trim().charAt(0).toUpperCase() || "?";
+      }
     }
 
     function makeButton(label, className, onClick) {
@@ -694,7 +772,7 @@
 
       if (options.unreadBadge) row.classList.add("friend-row");
 
-      row.appendChild(makeAvatar(profile.username));
+      row.appendChild(makeAvatar(profile));
 
       const info = document.createElement("div");
       info.className = "person-info";
@@ -1313,7 +1391,7 @@
       showChatPanel();
 
       $("chatFriendName").textContent = friendName || "Conversation";
-      $("chatAvatar").textContent = (friendName || "?").charAt(0).toUpperCase();
+      renderAvatarInto($("chatAvatar"), await getProfile(friendId) || { username: friendName });
       $("chatSubtitle").textContent = "Direct message";
       $("messagesList").replaceChildren();
 
@@ -1719,118 +1797,220 @@
     $("friendSearchForm").addEventListener("submit", searchUsers);
     $("messageForm").addEventListener("submit", sendMessage);
 
-    const usernameInput = $("newUsernameInput");
-    const saveUsernameButton = $("saveUsernameButton");
-
-    function validateUsername(username) {
-      if (username.length < 3 || username.length > 24) {
-        return "Username must be between 3-24 characters!";
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return "Username can only use letters, numbers, or _";
-      }
-
-      if (username.endsWith("_")) {
-        return "Username cannot end in _";
-      }
-
-      return "";
-    }
-
-    function updateUsernameEditor() {
-      const username = usernameInput.value.trim();
-      const originalUsername = currentProfile?.username || "";
-      const changed = username !== originalUsername;
-      const validationError = validateUsername(username);
-
-      saveUsernameButton.disabled =
-        !currentUser ||
-        !currentProfile ||
-        !changed ||
-        Boolean(validationError);
-
-      if (!changed) {
-        setStatus("settingsStatus", "");
-      } else if (validationError) {
-        setStatus("settingsStatus", validationError, "error");
-      } else {
-        setStatus("settingsStatus", "");
-      }
-    }
-
-    usernameInput.addEventListener("input", updateUsernameEditor);
-
     $("changeNameForm").addEventListener("submit", async event => {
       event.preventDefault();
-
       if (!currentUser || !currentProfile) return;
 
-      const username = usernameInput.value.trim();
+      const username = $("newUsernameInput").value.trim();
       const lower = usernameKey(username);
-      const originalUsername = currentProfile.username || "";
+      const saveButton = $("saveUsernameButton");
+      setStatus("settingsStatus", "");
 
-      if (username === originalUsername) {
-        saveUsernameButton.disabled = true;
-        setStatus("settingsStatus", "");
+      if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
+        setStatus("settingsStatus", "Usernames must be 3–24 characters and use only letters, numbers, and underscores.", "error");
         return;
       }
 
-      const validationError = validateUsername(username);
-      if (validationError) {
-        setStatus("settingsStatus", validationError, "error");
-        updateUsernameEditor();
+      if (username === currentProfile.username) {
+        setStatus("settingsStatus", "That is already your username.");
         return;
       }
 
-      saveUsernameButton.disabled = true;
-      usernameInput.disabled = true;
-      setStatus("settingsStatus", "Checking username...");
+      saveButton.disabled = true;
 
       try {
         const matching = await db.collection("users")
-          .where("usernameLower", "==", lower)
-          .limit(2)
-          .get();
+          .where("usernameLower", "==", lower).limit(1).get();
 
-        const usernameIsTaken = matching.docs.some(
-          doc => doc.id !== currentUser.uid
-        );
-
-        if (usernameIsTaken) {
-          setStatus("settingsStatus", "Username already in use!", "error");
-          return;
+        if (matching.docs.some(doc => doc.id !== currentUser.uid)) {
+          throw new Error("That username is already taken.");
         }
 
-        // Update only the signed-in user's profile. Firestore rules correctly
-        // prevent clients from editing contact documents owned by other users.
-        await db.collection("users").doc(currentUser.uid).update({
+        const batch = db.batch();
+        batch.update(db.collection("users").doc(currentUser.uid), {
           username,
           usernameLower: lower
         });
 
-        currentProfile = {
-          ...currentProfile,
-          username,
-          usernameLower: lower
-        };
+        const contacts = await db.collection("friends").doc(currentUser.uid)
+          .collection("contacts").get();
 
+        contacts.forEach(contact => {
+          batch.set(db.collection("friends").doc(contact.id)
+            .collection("contacts").doc(currentUser.uid), { username }, { merge: true });
+        });
+
+        await batch.commit();
+        currentProfile = { ...currentProfile, username, usernameLower: lower };
         $("accountName").textContent = username;
-        usernameInput.value = username;
+        renderAvatarInto($("accountAvatar"), currentProfile);
+        renderAvatarInto($("profileAvatarButton"), currentProfile);
         setStatus("settingsStatus", "Username updated successfully.", "success");
       } catch (error) {
         console.error("Username update error:", error);
-        setStatus("settingsStatus", friendlyError(error), "error");
+        setStatus("settingsStatus", error.message || friendlyError(error), "error");
       } finally {
-        usernameInput.disabled = false;
-        const finalUsername = usernameInput.value.trim();
-        saveUsernameButton.disabled =
-          !currentUser ||
-          !currentProfile ||
-          finalUsername === (currentProfile?.username || "") ||
-          Boolean(validateUsername(finalUsername));
+        saveButton.disabled = false;
       }
     });
+    /* Profile picture selection and circular crop editor */
+    let selectedProfileImage = null;
+    let cropObjectUrl = null;
+    let cropScale = 1;
+    let cropBaseScale = 1;
+    let cropX = 0;
+    let cropY = 0;
+    let cropPointer = null;
+
+    function openProfilePage() {
+      closeActiveChat();
+      showPage("settings");
+      closeNavigationMenu();
+    }
+
+    $("accountProfileButton").addEventListener("click", openProfilePage);
+    $("profileAvatarButton").addEventListener("click", () => $("profilePictureInput").click());
+    $("chooseProfilePictureButton").addEventListener("click", () => $("profilePictureInput").click());
+
+    $("profilePictureInput").addEventListener("change", event => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        setStatus("pictureStatus", "Choose a JPG, PNG, or WebP image.", "error");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setStatus("pictureStatus", "Choose an image smaller than 10 MB.", "error");
+        return;
+      }
+      selectedProfileImage = file;
+      if (cropObjectUrl) URL.revokeObjectURL(cropObjectUrl);
+      cropObjectUrl = URL.createObjectURL(file);
+      const image = $("cropImage");
+      image.onload = () => {
+        const stage = $("cropStage");
+        const size = stage.clientWidth;
+        cropBaseScale = Math.max(size / image.naturalWidth, size / image.naturalHeight);
+        cropScale = 1;
+        $("cropZoom").value = "1";
+        cropX = (size - image.naturalWidth * cropBaseScale) / 2;
+        cropY = (size - image.naturalHeight * cropBaseScale) / 2;
+        updateCropPreview();
+      };
+      image.src = cropObjectUrl;
+      $("cropStatus").textContent = "";
+      $("cropModal").classList.remove("hidden");
+      setStatus("pictureStatus", "");
+    });
+
+    function updateCropPreview() {
+      const image = $("cropImage");
+      if (!image.naturalWidth) return;
+      const size = $("cropStage").clientWidth;
+      const width = image.naturalWidth * cropBaseScale * cropScale;
+      const height = image.naturalHeight * cropBaseScale * cropScale;
+      cropX = Math.min(0, Math.max(size - width, cropX));
+      cropY = Math.min(0, Math.max(size - height, cropY));
+      image.style.width = width + "px";
+      image.style.height = height + "px";
+      image.style.left = cropX + "px";
+      image.style.top = cropY + "px";
+    }
+
+    $("cropZoom").addEventListener("input", event => {
+      const oldScale = cropScale;
+      cropScale = Number(event.target.value);
+      const stageSize = $("cropStage").clientWidth;
+      const centerX = stageSize / 2;
+      const centerY = stageSize / 2;
+      const ratio = cropScale / oldScale;
+      cropX = centerX - (centerX - cropX) * ratio;
+      cropY = centerY - (centerY - cropY) * ratio;
+      updateCropPreview();
+    });
+
+    $("cropStage").addEventListener("pointerdown", event => {
+      if (!selectedProfileImage) return;
+      cropPointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    });
+    $("cropStage").addEventListener("pointermove", event => {
+      if (!cropPointer || cropPointer.id !== event.pointerId) return;
+      cropX += event.clientX - cropPointer.x;
+      cropY += event.clientY - cropPointer.y;
+      cropPointer.x = event.clientX;
+      cropPointer.y = event.clientY;
+      updateCropPreview();
+    });
+    function stopCropDrag() { cropPointer = null; }
+    $("cropStage").addEventListener("pointerup", stopCropDrag);
+    $("cropStage").addEventListener("pointercancel", stopCropDrag);
+
+    function closeCropModal() {
+      $("cropModal").classList.add("hidden");
+      selectedProfileImage = null;
+      cropPointer = null;
+      if (cropObjectUrl) URL.revokeObjectURL(cropObjectUrl);
+      cropObjectUrl = null;
+      $("cropImage").removeAttribute("src");
+    }
+    $("cancelCropButton").addEventListener("click", closeCropModal);
+    $("cropModal").addEventListener("click", event => {
+      if (event.target === $("cropModal")) closeCropModal();
+    });
+
+    async function uploadProfilePicture(blob) {
+      const formData = new FormData();
+      formData.append("file", blob, "celio-profile.jpg");
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+        method: "POST",
+        body: formData
+      });
+      const result = await response.json();
+      if (!response.ok || !result.secure_url) {
+        throw new Error(result.error?.message || "The profile picture could not be uploaded.");
+      }
+      return result.secure_url;
+    }
+
+    $("saveCropButton").addEventListener("click", async () => {
+      if (!selectedProfileImage || !currentUser || !currentProfile) return;
+      const button = $("saveCropButton");
+      button.disabled = true;
+      $("cropStatus").textContent = "Preparing picture...";
+      try {
+        const stage = $("cropStage");
+        const image = $("cropImage");
+        const outputSize = 512;
+        const scale = outputSize / stage.clientWidth;
+        const canvas = document.createElement("canvas");
+        canvas.width = outputSize;
+        canvas.height = outputSize;
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#202020";
+        context.fillRect(0, 0, outputSize, outputSize);
+        context.drawImage(image, cropX * scale, cropY * scale, image.naturalWidth * cropBaseScale * cropScale * scale, image.naturalHeight * cropBaseScale * cropScale * scale);
+        const croppedBlob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.9));
+        if (!croppedBlob) throw new Error("Could not process this image. Try another one.");
+        $("cropStatus").textContent = "Uploading picture...";
+        const avatarUrl = await uploadProfilePicture(croppedBlob);
+        await db.collection("users").doc(currentUser.uid).update({ avatarUrl });
+        currentProfile = { ...currentProfile, avatarUrl };
+        renderAvatarInto($("accountAvatar"), currentProfile);
+        renderAvatarInto($("profileAvatarButton"), currentProfile);
+        if (activeChatId) renderAvatarInto($("chatAvatar"), currentProfile);
+        closeCropModal();
+        setStatus("pictureStatus", "Profile picture updated.", "success");
+      } catch (error) {
+        console.error("Profile picture update error:", error);
+        $("cropStatus").textContent = error.message || "Could not save the profile picture.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+
     $("messageInput").addEventListener("input", handleTypingInput);
 
     $("attachButton").addEventListener("click", () => {
@@ -1873,7 +2053,7 @@
 
     menuBackdrop.addEventListener("click", closeNavigationMenu);
     document.addEventListener("keydown", event => {
-      if (event.key === "Escape") closeNavigationMenu();
+      if (event.key === "Escape") { closeNavigationMenu(); if (!$("cropModal").classList.contains("hidden")) closeCropModal(); }
     });
 
     document.querySelectorAll("[data-page]").forEach(button => {
@@ -1912,6 +2092,8 @@
         }
 
         $("accountName").textContent = currentProfile.username || "Celio user";
+        renderAvatarInto($("accountAvatar"), currentProfile);
+        renderAvatarInto($("profileAvatarButton"), currentProfile);
         $("accountId").textContent = "Account ID: " + user.uid;
         $("authScreen").classList.add("hidden");
         $("appScreen").classList.remove("hidden");
