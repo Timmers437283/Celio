@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -61,6 +60,9 @@
     .sidebar-bottom { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
     .account-name { padding: 0 4px; font-weight: 600; overflow-wrap: anywhere; }
     .account-id { padding: 5px 4px 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .account-id-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .account-id-row .account-id { min-width: 0; flex: 1; }
+    .account-id-row .text-button { margin-top: 1px; flex-shrink: 0; font-size: 12px; }
     main { min-width: 0; min-height: 100vh; display: flex; flex-direction: column; }
     .topbar { height: 70px; padding: 0 28px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); }
     .menu-toggle { width: 40px; height: 40px; flex-shrink: 0; display: grid; place-items: center; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 9px; }
@@ -88,7 +90,7 @@
     .profile-picture-copy { color: var(--muted); line-height: 1.5; }
     .profile-picture-copy strong { display: block; margin-bottom: 4px; color: var(--text); }
     .celio-number-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 9px; background: #090909; }
-    .celio-number-row strong { font-size: 15px; letter-spacing: .2px; overflow-wrap: anywhere; }
+    .celio-number-row strong { font-size: 15px; letter-spacing: .2px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
     .celio-number-row button { flex-shrink: 0; }
 
     .crop-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.76); }
@@ -299,7 +301,10 @@
           <div class="avatar" id="accountAvatar">?</div>
           <div class="account-profile-copy"><strong id="accountName">Celio user</strong><span>View profile</span></div>
         </button>
-        <div id="accountId" class="account-id"></div>
+        <div class="account-id-row">
+          <div id="accountId" class="account-id"></div>
+          <button id="sidebarCopyNumberButton" class="text-button" type="button" aria-label="Copy your Celio number">Copy</button>
+        </div>
         <button id="signOutButton" class="nav-button">Sign out</button>
       </div>
     </aside>
@@ -312,9 +317,9 @@
       </header>
       <section id="friendsPage" class="content">
         <h2 class="page-heading">Friends</h2>
-        <p class="page-description">Find people by exact username or their unique Celio number.</p>
+        <p class="page-description">Find people by exact username or their unique Celio number, like +1 (555) 123-4567.</p>
         <form id="friendSearchForm" class="search-row">
-          <input id="friendSearchInput" placeholder="Search username or Celio number" maxlength="32" autocomplete="off" required>
+          <input id="friendSearchInput" placeholder="Username or Celio number" maxlength="32" autocomplete="off" required>
           <button class="primary" type="submit">Find</button>
         </form>
         <div id="searchResults" class="list"></div>
@@ -341,7 +346,7 @@
           <button type="button" id="chooseProfilePictureButton" class="secondary">Choose a picture</button>
           <p id="pictureStatus" class="status" aria-live="polite"></p>
           <h3 class="subheading">Your Celio number</h3>
-          <p class="muted" style="line-height:1.5;margin:0 0 12px">Share this unique Celio ID so friends can find you. It looks like a phone number, but it is not a real phone line.</p>
+          <p class="muted" style="line-height:1.5;margin:0 0 12px">Share this unique Celio number so friends can find you. It looks like a phone number, but it is not a real phone line.</p>
           <div class="celio-number-row">
             <strong id="profileCelioNumber">Assigning your number...</strong>
             <button type="button" id="copyCelioNumberButton" class="secondary">Copy</button>
@@ -425,6 +430,7 @@
     let currentUser = null;
     let currentProfile = null;
     let creatingAccount = false;
+    let signupInProgress = false;
     let activeChatId = null;
     let activeFriendId = null;
     let friendsUnsubscribe = null;
@@ -457,6 +463,8 @@
       return username.trim().toLowerCase();
     }
 
+    /* ---------- Celio numbers ---------- */
+
     function normalizeCelioNumber(value) {
       let digits = String(value || "").replace(/\D/g, "");
       if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
@@ -469,24 +477,147 @@
       return `+1 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
     }
 
-    async function generateUniqueCelioNumber() {
-      for (let attempt = 0; attempt < 40; attempt++) {
-        const suffix = String(Math.floor(Math.random() * 10000000)).padStart(7, "0");
-        const candidate = "555" + suffix;
-        const match = await db.collection("users").where("celioNumber", "==", candidate).limit(1).get();
-        if (match.empty) return candidate;
+    function randomCelioNumber() {
+      const buffer = new Uint32Array(1);
+      crypto.getRandomValues(buffer);
+      return "555" + String(buffer[0] % 10000000).padStart(7, "0");
+    }
+
+    function celioError(code, message) {
+      const error = new Error(message);
+      error.code = code;
+      return error;
+    }
+
+    /*
+      Claims a Celio number for a user inside ONE Firestore transaction.
+
+      - phoneNumbers/{digits} is the registry. A document ID can only exist once,
+        and the transaction fails or retries if two people claim the same number.
+      - The user document and the registry entry are written together, so a number
+        can never be stored on a profile without being reserved (or the reverse).
+      - If the user already has a number, it is kept (never regenerated).
+      - If the user document does not exist yet (new signup), newProfile is used to create it.
+    */
+    async function claimCelioNumber(uid, newProfile) {
+      const userRef = db.collection("users").doc(uid);
+
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const candidate = randomCelioNumber();
+
+        try {
+          return await db.runTransaction(async transaction => {
+            const userSnap = await transaction.get(userRef);
+            const existing = userSnap.exists ? normalizeCelioNumber(userSnap.data().celioNumber) : "";
+            const hasExisting = existing.length === 10;
+
+            let number = hasExisting ? existing : candidate;
+            let phoneRef = db.collection("phoneNumbers").doc(number);
+            let phoneSnap = await transaction.get(phoneRef);
+
+            if (phoneSnap.exists && phoneSnap.data().uid === uid) {
+              /* Already registered to this user. Nothing to change. */
+              return number;
+            }
+
+            if (phoneSnap.exists && hasExisting) {
+              /* Legacy number was somehow given to someone else. Replace it with a new one. */
+              number = candidate;
+              phoneRef = db.collection("phoneNumbers").doc(number);
+              phoneSnap = await transaction.get(phoneRef);
+            }
+
+            if (phoneSnap.exists) {
+              throw celioError("celio/taken", "Number already taken.");
+            }
+
+            transaction.set(phoneRef, { uid, createdAt: serverTimestamp() });
+
+            if (userSnap.exists) {
+              transaction.update(userRef, { celioNumber: number });
+            } else {
+              transaction.set(userRef, { ...newProfile, celioNumber: number });
+            }
+
+            return number;
+          });
+        } catch (error) {
+          if (error?.code === "celio/taken") continue;
+          throw error;
+        }
       }
+
       throw new Error("Celio couldn't assign a number right now. Please try again.");
     }
 
-    async function ensureCelioNumber(profile) {
-      if (profile?.celioNumber && normalizeCelioNumber(profile.celioNumber).length === 10) {
-        return profile;
+    let numberClaimPromise = null;
+
+    async function ensureCelioNumber(uid, profile) {
+      if (numberClaimPromise) return numberClaimPromise;
+
+      numberClaimPromise = (async () => {
+        const stored = normalizeCelioNumber(profile?.celioNumber);
+
+        if (stored.length === 10) {
+          /* Make sure the existing number is in the registry; do not generate a new one. */
+          const registry = await db.collection("phoneNumbers").doc(stored).get();
+          if (registry.exists && registry.data().uid === uid) {
+            return { ...profile, celioNumber: stored };
+          }
+        }
+
+        const number = await claimCelioNumber(uid);
+        return { ...profile, celioNumber: number };
+      })();
+
+      try {
+        return await numberClaimPromise;
+      } finally {
+        numberClaimPromise = null;
       }
-      const celioNumber = await generateUniqueCelioNumber();
-      await db.collection("users").doc(currentUser.uid).update({ celioNumber });
-      currentProfile = { ...profile, celioNumber };
-      return currentProfile;
+    }
+
+    async function findProfileByCelioNumber(digits) {
+      const registry = await db.collection("phoneNumbers").doc(digits).get();
+
+      if (registry.exists) {
+        const ownerId = registry.data().uid;
+        return ownerId ? await getProfile(ownerId) : null;
+      }
+
+      /* Older accounts that haven't signed in since the update aren't in the registry yet. */
+      const legacy = await db.collection("users").where("celioNumber", "==", digits).limit(1).get();
+      if (legacy.empty) return null;
+      return { uid: legacy.docs[0].id, ...legacy.docs[0].data() };
+    }
+
+    async function findProfileByUsername(username) {
+      const match = await db.collection("users")
+        .where("usernameLower", "==", usernameKey(username)).limit(1).get();
+      if (match.empty) return null;
+      return { uid: match.docs[0].id, ...match.docs[0].data() };
+    }
+
+    async function copyCelioNumber() {
+      const number = currentProfile?.celioNumber;
+      if (!number) throw new Error("Your Celio number is not ready yet.");
+
+      const text = formatCelioNumber(number);
+
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand("copy");
+        area.remove();
+        if (!ok) throw new Error("Copy wasn't available. Select and copy the number manually.");
+      }
     }
 
     function chatIdFor(a, b) {
@@ -874,16 +1005,89 @@
       return mine.exists && theirs.exists;
     }
 
+    async function renderSearchResult(profile) {
+      const subtitle = profile.celioNumber ? formatCelioNumber(profile.celioNumber) : "Celio user";
+      const box = $("searchResults");
+      box.replaceChildren();
+
+      const contact = await db.collection("friends").doc(currentUser.uid)
+        .collection("contacts").doc(profile.uid).get();
+
+      if (contact.exists) {
+        box.appendChild(makePersonRow(profile, subtitle + " · Already friends", [{
+          label: "Message",
+          className: "primary",
+          onClick: () => openChat(profile.uid, profile.username)
+        }]));
+        return;
+      }
+
+      const outgoing = await db.collection("friendRequests")
+        .where("senderId", "==", currentUser.uid)
+        .where("receiverId", "==", profile.uid)
+        .where("status", "==", "pending").limit(1).get();
+
+      if (!outgoing.empty) {
+        box.appendChild(makePersonRow(profile, subtitle + " · Request sent"));
+        return;
+      }
+
+      const incoming = await db.collection("friendRequests")
+        .where("senderId", "==", profile.uid)
+        .where("receiverId", "==", currentUser.uid)
+        .where("status", "==", "pending").limit(1).get();
+
+      if (!incoming.empty) {
+        box.appendChild(makePersonRow(profile, subtitle + " · They sent you a request", [{
+          label: "View requests",
+          className: "secondary",
+          onClick: () => showPage("requests")
+        }]));
+        return;
+      }
+
+      box.appendChild(makePersonRow(profile, subtitle, [{
+        label: "Add friend",
+        className: "primary",
+        onClick: () => sendFriendRequest(profile)
+      }]));
+    }
+
     async function searchUsers(event) {
       event.preventDefault();
       const rawQuery = $("friendSearchInput").value.trim();
-      const query = usernameKey(rawQuery);
-      const numberQuery = normalizeCelioNumber(rawQuery);
       $("searchResults").replaceChildren();
       setStatus("friendsStatus", "");
 
-      if (query.length < 2) {
+      if (!rawQuery) {
         setStatus("friendsStatus", "Enter a username or Celio number.");
+        return;
+      }
+
+      const digits = normalizeCelioNumber(rawQuery);
+      const phoneLike = /^[+()\d\s.\-]+$/.test(rawQuery) && /\d/.test(rawQuery);
+      const usernameLike = /^[a-zA-Z0-9_]{3,24}$/.test(rawQuery);
+      let mode = null;
+
+      if (phoneLike && digits.length === 10) {
+        mode = "number";
+      } else if (usernameLike) {
+        mode = "username";
+      } else if (phoneLike) {
+        setStatus("friendsStatus", "Enter the full 10-digit Celio number, for example +1 (555) 123-4567.", "error");
+        return;
+      } else {
+        setStatus("friendsStatus", "Enter an exact username (letters, numbers, underscores) or a Celio number.", "error");
+        return;
+      }
+
+      if (mode === "number" && !digits.startsWith("555")) {
+        setStatus("friendsStatus", "Celio numbers start with +1 (555). Check the number and try again.", "error");
+        return;
+      }
+
+      if (mode === "number" && digits === normalizeCelioNumber(currentProfile?.celioNumber)) {
+        setStatus("friendsStatus", "That's your own Celio number. You can't add yourself.", "error");
         return;
       }
 
@@ -891,66 +1095,23 @@
       button.disabled = true;
 
       try {
-        const lookups = [db.collection("users").where("usernameLower", "==", query).limit(10).get()];
-        if (numberQuery.length === 10) {
-          lookups.push(db.collection("users").where("celioNumber", "==", numberQuery).limit(10).get());
-        }
-        const snapshots = await Promise.all(lookups);
-        const found = new Map();
-        snapshots.forEach(snapshot => snapshot.docs.forEach(doc => {
-          if (doc.id !== currentUser.uid) found.set(doc.id, { uid: doc.id, ...doc.data() });
-        }));
-        const results = [...found.values()];
+        const profile = mode === "number"
+          ? await findProfileByCelioNumber(digits)
+          : await findProfileByUsername(rawQuery);
 
-        if (!results.length) {
-          renderEmpty("searchResults", "No account found. Check the exact username or Celio number.");
+        if (!profile) {
+          renderEmpty("searchResults", mode === "number"
+            ? "No account found with that Celio number."
+            : "No account found. Check the exact username.");
           return;
         }
 
-        for (const profile of results) {
-          const subtitle = profile.celioNumber ? formatCelioNumber(profile.celioNumber) : "Celio user";
-          const contact = await db.collection("friends").doc(currentUser.uid)
-            .collection("contacts").doc(profile.uid).get();
-
-          if (contact.exists) {
-            $("searchResults").appendChild(makePersonRow(profile, subtitle + " · Already friends", [{
-              label: "Message",
-              className: "primary",
-              onClick: () => openChat(profile.uid, profile.username)
-            }]));
-            continue;
-          }
-
-          const outgoing = await db.collection("friendRequests")
-            .where("senderId", "==", currentUser.uid)
-            .where("receiverId", "==", profile.uid)
-            .where("status", "==", "pending").limit(1).get();
-
-          if (!outgoing.empty) {
-            $("searchResults").appendChild(makePersonRow(profile, subtitle + " · Request sent"));
-            continue;
-          }
-
-          const incoming = await db.collection("friendRequests")
-            .where("senderId", "==", profile.uid)
-            .where("receiverId", "==", currentUser.uid)
-            .where("status", "==", "pending").limit(1).get();
-
-          if (!incoming.empty) {
-            $("searchResults").appendChild(makePersonRow(profile, subtitle + " · They sent you a request", [{
-              label: "View requests",
-              className: "secondary",
-              onClick: () => showPage("requests")
-            }]));
-            continue;
-          }
-
-          $("searchResults").appendChild(makePersonRow(profile, subtitle, [{
-            label: "Add friend",
-            className: "primary",
-            onClick: () => sendFriendRequest(profile)
-          }]));
+        if (profile.uid === currentUser.uid) {
+          setStatus("friendsStatus", "That's your own account. You can't add yourself.", "error");
+          return;
         }
+
+        await renderSearchResult(profile);
       } catch (error) {
         console.error(error);
         setStatus("friendsStatus", friendlyError(error), "error");
@@ -963,6 +1124,19 @@
       setStatus("friendsStatus", "");
 
       try {
+        if (profile.uid === currentUser.uid) {
+          setStatus("friendsStatus", "You can't add yourself.", "error");
+          return;
+        }
+
+        const contact = await db.collection("friends").doc(currentUser.uid)
+          .collection("contacts").doc(profile.uid).get();
+
+        if (contact.exists) {
+          setStatus("friendsStatus", "You're already friends.");
+          return;
+        }
+
         const existing = await db.collection("friendRequests")
           .where("senderId", "==", currentUser.uid)
           .where("receiverId", "==", profile.uid)
@@ -970,6 +1144,16 @@
 
         if (!existing.empty) {
           setStatus("friendsStatus", "You've already sent a request.");
+          return;
+        }
+
+        const incoming = await db.collection("friendRequests")
+          .where("senderId", "==", profile.uid)
+          .where("receiverId", "==", currentUser.uid)
+          .where("status", "==", "pending").limit(1).get();
+
+        if (!incoming.empty) {
+          setStatus("friendsStatus", "They already sent you a request. Check your Requests page.");
           return;
         }
 
@@ -983,7 +1167,7 @@
         });
 
         setStatus("friendsStatus", "Friend request sent.", "success");
-        await searchUsers({ preventDefault() {} });
+        await renderSearchResult(profile);
       } catch (error) {
         console.error(error);
         setStatus("friendsStatus", friendlyError(error), "error");
@@ -1010,7 +1194,7 @@
       list.replaceChildren();
 
       if (!friendsCache.length) {
-        renderEmpty("friendsList", "No friends yet. Search for a username to add someone.");
+        renderEmpty("friendsList", "No friends yet. Search for a username or Celio number to add someone.");
         return;
       }
 
@@ -1079,6 +1263,15 @@
         }
 
         await ref.update({ status: "accepted" });
+
+        const existingContact = await db.collection("friends").doc(currentUser.uid)
+          .collection("contacts").doc(request.senderId).get();
+
+        if (existingContact.exists) {
+          setStatus("requestsStatus", "You're already friends.", "success");
+          return;
+        }
+
         const other = await getProfile(request.senderId);
         const batch = db.batch();
 
@@ -1812,6 +2005,9 @@
 
       $("authSubmit").disabled = true;
 
+      let credential = null;
+      let profileSaved = false;
+
       try {
         if (creatingAccount) {
           if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
@@ -1824,23 +2020,34 @@
 
           if (!matching.empty) throw new Error("That username is already taken.");
 
-          const credential = await auth.createUserWithEmailAndPassword(email, password);
-          const celioNumber = await generateUniqueCelioNumber();
+          /* Keep the auth listener from reacting before the profile and number exist. */
+          signupInProgress = true;
+          credential = await auth.createUserWithEmailAndPassword(email, password);
 
-          await db.collection("users").doc(credential.user.uid).set({
+          /* Creates the profile and reserves a unique number in a single transaction. */
+          await claimCelioNumber(credential.user.uid, {
             uid: credential.user.uid,
             username,
             usernameLower: lower,
-            celioNumber,
             createdAt: serverTimestamp()
           });
+
+          profileSaved = true;
+          signupInProgress = false;
+          await startSession(credential.user);
         } else {
           await auth.signInWithEmailAndPassword(email, password);
         }
       } catch (error) {
         console.error(error);
         setStatus("authStatus", friendlyError(error), "error");
+
+        if (credential && !profileSaved) {
+          /* Don't leave a half-created account behind. */
+          try { await credential.user.delete(); } catch (deleteError) { console.error(deleteError); }
+        }
       } finally {
+        signupInProgress = false;
         $("authSubmit").disabled = false;
       }
     });
@@ -1906,18 +2113,27 @@
         saveButton.disabled = false;
       }
     });
+
     $("copyCelioNumberButton").addEventListener("click", async () => {
-      const number = currentProfile?.celioNumber;
-      if (!number) {
-        setStatus("celioNumberStatus", "Your Celio number is not ready yet.", "error");
-        return;
-      }
       try {
-        await navigator.clipboard.writeText(formatCelioNumber(number));
+        await copyCelioNumber();
         setStatus("celioNumberStatus", "Celio number copied.", "success");
       } catch (error) {
-        setStatus("celioNumberStatus", "Copy wasn't available. Select and copy the number manually.", "error");
+        setStatus("celioNumberStatus", error.message || "Could not copy the number.", "error");
       }
+    });
+
+    let sidebarCopyTimer = null;
+    $("sidebarCopyNumberButton").addEventListener("click", async () => {
+      const button = $("sidebarCopyNumberButton");
+      try {
+        await copyCelioNumber();
+        button.textContent = "Copied";
+      } catch (error) {
+        button.textContent = "Failed";
+      }
+      clearTimeout(sidebarCopyTimer);
+      sidebarCopyTimer = setTimeout(() => { button.textContent = "Copy"; }, 1500);
     });
 
     /* Profile picture selection and circular crop editor */
@@ -2132,7 +2348,7 @@
 
     /* Restore signed-in session */
 
-    auth.onAuthStateChanged(async user => {
+    async function startSession(user) {
       stopListeners();
       currentUser = user;
       currentProfile = null;
@@ -2158,7 +2374,9 @@
           return;
         }
 
-        currentProfile = await ensureCelioNumber(currentProfile);
+        /* Existing accounts: keeps the current number, or assigns one exactly once. */
+        currentProfile = await ensureCelioNumber(user.uid, currentProfile);
+
         $("profileCelioNumber").textContent = formatCelioNumber(currentProfile.celioNumber);
         $("accountName").textContent = currentProfile.username || "Celio user";
         renderAvatarInto($("accountAvatar"), currentProfile);
@@ -2174,6 +2392,12 @@
         console.error(error);
         setStatus("authStatus", friendlyError(error), "error");
       }
+    }
+
+    auth.onAuthStateChanged(user => {
+      /* During signup the form handler starts the session once the profile is saved. */
+      if (signupInProgress && user) return;
+      startSession(user);
     });
   </script>
 </body>
