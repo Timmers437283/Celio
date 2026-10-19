@@ -1802,30 +1802,12 @@
           return;
         }
 
-        const batch = db.batch();
-        batch.update(db.collection("users").doc(currentUser.uid), {
+        // Update only the signed-in user's profile. Firestore rules correctly
+        // prevent clients from editing contact documents owned by other users.
+        await db.collection("users").doc(currentUser.uid).update({
           username,
-          usernameLower: lower,
-          updatedAt: serverTimestamp()
+          usernameLower: lower
         });
-
-        const contacts = await db.collection("friends")
-          .doc(currentUser.uid)
-          .collection("contacts")
-          .get();
-
-        contacts.forEach(contact => {
-          batch.set(
-            db.collection("friends")
-              .doc(contact.id)
-              .collection("contacts")
-              .doc(currentUser.uid),
-            { username },
-            { merge: true }
-          );
-        });
-
-        await batch.commit();
 
         currentProfile = {
           ...currentProfile,
