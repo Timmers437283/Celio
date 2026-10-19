@@ -317,9 +317,9 @@
       </header>
       <section id="friendsPage" class="content">
         <h2 class="page-heading">Friends</h2>
-        <p class="page-description">Find people by exact username or their unique Celio number, like +1 (555) 123-4567.</p>
+        <p class="page-description">Add people by their Celio number, like +1 (555) 123-4567.</p>
         <form id="friendSearchForm" class="search-row">
-          <input id="friendSearchInput" placeholder="Username or Celio number" maxlength="32" autocomplete="off" required>
+          <input id="friendSearchInput" type="tel" inputmode="tel" placeholder="Celio number" maxlength="32" autocomplete="off" required>
           <button class="primary" type="submit">Find</button>
         </form>
         <div id="searchResults" class="list"></div>
@@ -589,13 +589,6 @@
       const legacy = await db.collection("users").where("celioNumber", "==", digits).limit(1).get();
       if (legacy.empty) return null;
       return { uid: legacy.docs[0].id, ...legacy.docs[0].data() };
-    }
-
-    async function findProfileByUsername(username) {
-      const match = await db.collection("users")
-        .where("usernameLower", "==", usernameKey(username)).limit(1).get();
-      if (match.empty) return null;
-      return { uid: match.docs[0].id, ...match.docs[0].data() };
     }
 
     async function copyCelioNumber() {
@@ -1053,6 +1046,7 @@
       }]));
     }
 
+    /* Friend search: Celio number only */
     async function searchUsers(event) {
       event.preventDefault();
       const rawQuery = $("friendSearchInput").value.trim();
@@ -1060,33 +1054,29 @@
       setStatus("friendsStatus", "");
 
       if (!rawQuery) {
-        setStatus("friendsStatus", "Enter a username or Celio number.");
+        setStatus("friendsStatus", "Enter a Celio number.", "error");
+        return;
+      }
+
+      /* Only digits and normal phone punctuation are allowed. Usernames are not searchable. */
+      if (!/^[+()\d\s.\-]+$/.test(rawQuery) || !/\d/.test(rawQuery)) {
+        setStatus("friendsStatus", "Enter a Celio number, for example +1 (555) 123-4567.", "error");
         return;
       }
 
       const digits = normalizeCelioNumber(rawQuery);
-      const phoneLike = /^[+()\d\s.\-]+$/.test(rawQuery) && /\d/.test(rawQuery);
-      const usernameLike = /^[a-zA-Z0-9_]{3,24}$/.test(rawQuery);
-      let mode = null;
 
-      if (phoneLike && digits.length === 10) {
-        mode = "number";
-      } else if (usernameLike) {
-        mode = "username";
-      } else if (phoneLike) {
+      if (digits.length !== 10) {
         setStatus("friendsStatus", "Enter the full 10-digit Celio number, for example +1 (555) 123-4567.", "error");
-        return;
-      } else {
-        setStatus("friendsStatus", "Enter an exact username (letters, numbers, underscores) or a Celio number.", "error");
         return;
       }
 
-      if (mode === "number" && !digits.startsWith("555")) {
+      if (!digits.startsWith("555")) {
         setStatus("friendsStatus", "Celio numbers start with +1 (555). Check the number and try again.", "error");
         return;
       }
 
-      if (mode === "number" && digits === normalizeCelioNumber(currentProfile?.celioNumber)) {
+      if (digits === normalizeCelioNumber(currentProfile?.celioNumber)) {
         setStatus("friendsStatus", "That's your own Celio number. You can't add yourself.", "error");
         return;
       }
@@ -1095,14 +1085,10 @@
       button.disabled = true;
 
       try {
-        const profile = mode === "number"
-          ? await findProfileByCelioNumber(digits)
-          : await findProfileByUsername(rawQuery);
+        const profile = await findProfileByCelioNumber(digits);
 
         if (!profile) {
-          renderEmpty("searchResults", mode === "number"
-            ? "No account found with that Celio number."
-            : "No account found. Check the exact username.");
+          renderEmpty("searchResults", "No account found with that Celio number.");
           return;
         }
 
@@ -1194,7 +1180,7 @@
       list.replaceChildren();
 
       if (!friendsCache.length) {
-        renderEmpty("friendsList", "No friends yet. Search for a username or Celio number to add someone.");
+        renderEmpty("friendsList", "No friends yet. Enter a Celio number above to add someone.");
         return;
       }
 
