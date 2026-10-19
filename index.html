@@ -87,6 +87,10 @@
     .profile-picture-large { width: 92px; height: 92px; font-size: 32px; }
     .profile-picture-copy { color: var(--muted); line-height: 1.5; }
     .profile-picture-copy strong { display: block; margin-bottom: 4px; color: var(--text); }
+    .celio-number-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 9px; background: #090909; }
+    .celio-number-row strong { font-size: 15px; letter-spacing: .2px; overflow-wrap: anywhere; }
+    .celio-number-row button { flex-shrink: 0; }
+
     .crop-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.76); }
     .crop-modal.hidden { display: none; }
     .crop-dialog { width: min(100%, 430px); max-height: min(92dvh, 760px); overflow-y: auto; padding: 22px; background: #111; border: 1px solid #303030; border-radius: 16px; box-shadow: 0 24px 80px rgba(0,0,0,.4); }
@@ -308,9 +312,9 @@
       </header>
       <section id="friendsPage" class="content">
         <h2 class="page-heading">Friends</h2>
-        <p class="page-description">Find people and start a conversation.</p>
+        <p class="page-description">Find people by exact username or their unique Celio number.</p>
         <form id="friendSearchForm" class="search-row">
-          <input id="friendSearchInput" placeholder="Search exact username" maxlength="24" required>
+          <input id="friendSearchInput" placeholder="Search username or Celio number" maxlength="32" autocomplete="off" required>
           <button class="primary" type="submit">Find</button>
         </form>
         <div id="searchResults" class="list"></div>
@@ -336,6 +340,13 @@
           <input id="profilePictureInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp">
           <button type="button" id="chooseProfilePictureButton" class="secondary">Choose a picture</button>
           <p id="pictureStatus" class="status" aria-live="polite"></p>
+          <h3 class="subheading">Your Celio number</h3>
+          <p class="muted" style="line-height:1.5;margin:0 0 12px">Share this unique Celio ID so friends can find you. It looks like a phone number, but it is not a real phone line.</p>
+          <div class="celio-number-row">
+            <strong id="profileCelioNumber">Assigning your number...</strong>
+            <button type="button" id="copyCelioNumberButton" class="secondary">Copy</button>
+          </div>
+          <p id="celioNumberStatus" class="status" aria-live="polite"></p>
           <h3 class="subheading">Username</h3>
           <p class="muted" style="line-height:1.5;margin:0 0 18px">Change the username other people see on Celio. Usernames must be 3–24 characters and can use letters, numbers, and underscores.</p>
           <form id="changeNameForm">
@@ -444,6 +455,38 @@
 
     function usernameKey(username) {
       return username.trim().toLowerCase();
+    }
+
+    function normalizeCelioNumber(value) {
+      let digits = String(value || "").replace(/\D/g, "");
+      if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+      return digits;
+    }
+
+    function formatCelioNumber(value) {
+      const digits = normalizeCelioNumber(value);
+      if (digits.length !== 10) return "Celio number pending";
+      return `+1 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+
+    async function generateUniqueCelioNumber() {
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const suffix = String(Math.floor(Math.random() * 10000000)).padStart(7, "0");
+        const candidate = "555" + suffix;
+        const match = await db.collection("users").where("celioNumber", "==", candidate).limit(1).get();
+        if (match.empty) return candidate;
+      }
+      throw new Error("Celio couldn't assign a number right now. Please try again.");
+    }
+
+    async function ensureCelioNumber(profile) {
+      if (profile?.celioNumber && normalizeCelioNumber(profile.celioNumber).length === 10) {
+        return profile;
+      }
+      const celioNumber = await generateUniqueCelioNumber();
+      await db.collection("users").doc(currentUser.uid).update({ celioNumber });
+      currentProfile = { ...profile, celioNumber };
+      return currentProfile;
     }
 
     function chatIdFor(a, b) {
@@ -685,6 +728,7 @@
       $("topbarTitle").textContent = page === "friends" ? "Friends" : page === "requests" ? "Requests" : "Profile";
       if (page === "settings" && currentProfile) {
         $("newUsernameInput").value = currentProfile.username || "";
+        $("profileCelioNumber").textContent = formatCelioNumber(currentProfile.celioNumber);
         renderAvatarInto($("profileAvatarButton"), currentProfile);
       }
 
@@ -832,12 +876,14 @@
 
     async function searchUsers(event) {
       event.preventDefault();
-      const query = usernameKey($("friendSearchInput").value);
+      const rawQuery = $("friendSearchInput").value.trim();
+      const query = usernameKey(rawQuery);
+      const numberQuery = normalizeCelioNumber(rawQuery);
       $("searchResults").replaceChildren();
       setStatus("friendsStatus", "");
 
       if (query.length < 2) {
-        setStatus("friendsStatus", "Enter at least two characters.");
+        setStatus("friendsStatus", "Enter a username or Celio number.");
         return;
       }
 
@@ -845,24 +891,29 @@
       button.disabled = true;
 
       try {
-        const snapshot = await db.collection("users")
-          .where("usernameLower", "==", query).limit(10).get();
-
-        const results = snapshot.docs
-          .map(doc => ({ uid: doc.id, ...doc.data() }))
-          .filter(profile => profile.uid !== currentUser.uid);
+        const lookups = [db.collection("users").where("usernameLower", "==", query).limit(10).get()];
+        if (numberQuery.length === 10) {
+          lookups.push(db.collection("users").where("celioNumber", "==", numberQuery).limit(10).get());
+        }
+        const snapshots = await Promise.all(lookups);
+        const found = new Map();
+        snapshots.forEach(snapshot => snapshot.docs.forEach(doc => {
+          if (doc.id !== currentUser.uid) found.set(doc.id, { uid: doc.id, ...doc.data() });
+        }));
+        const results = [...found.values()];
 
         if (!results.length) {
-          renderEmpty("searchResults", "No account found with that exact username.");
+          renderEmpty("searchResults", "No account found. Check the exact username or Celio number.");
           return;
         }
 
         for (const profile of results) {
+          const subtitle = profile.celioNumber ? formatCelioNumber(profile.celioNumber) : "Celio user";
           const contact = await db.collection("friends").doc(currentUser.uid)
             .collection("contacts").doc(profile.uid).get();
 
           if (contact.exists) {
-            $("searchResults").appendChild(makePersonRow(profile, "Already friends", [{
+            $("searchResults").appendChild(makePersonRow(profile, subtitle + " · Already friends", [{
               label: "Message",
               className: "primary",
               onClick: () => openChat(profile.uid, profile.username)
@@ -876,7 +927,7 @@
             .where("status", "==", "pending").limit(1).get();
 
           if (!outgoing.empty) {
-            $("searchResults").appendChild(makePersonRow(profile, "Request sent"));
+            $("searchResults").appendChild(makePersonRow(profile, subtitle + " · Request sent"));
             continue;
           }
 
@@ -886,7 +937,7 @@
             .where("status", "==", "pending").limit(1).get();
 
           if (!incoming.empty) {
-            $("searchResults").appendChild(makePersonRow(profile, "They sent you a request", [{
+            $("searchResults").appendChild(makePersonRow(profile, subtitle + " · They sent you a request", [{
               label: "View requests",
               className: "secondary",
               onClick: () => showPage("requests")
@@ -894,7 +945,7 @@
             continue;
           }
 
-          $("searchResults").appendChild(makePersonRow(profile, "Celio user", [{
+          $("searchResults").appendChild(makePersonRow(profile, subtitle, [{
             label: "Add friend",
             className: "primary",
             onClick: () => sendFriendRequest(profile)
@@ -1774,11 +1825,13 @@
           if (!matching.empty) throw new Error("That username is already taken.");
 
           const credential = await auth.createUserWithEmailAndPassword(email, password);
+          const celioNumber = await generateUniqueCelioNumber();
 
           await db.collection("users").doc(credential.user.uid).set({
             uid: credential.user.uid,
             username,
             usernameLower: lower,
+            celioNumber,
             createdAt: serverTimestamp()
           });
         } else {
@@ -1853,6 +1906,20 @@
         saveButton.disabled = false;
       }
     });
+    $("copyCelioNumberButton").addEventListener("click", async () => {
+      const number = currentProfile?.celioNumber;
+      if (!number) {
+        setStatus("celioNumberStatus", "Your Celio number is not ready yet.", "error");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(formatCelioNumber(number));
+        setStatus("celioNumberStatus", "Celio number copied.", "success");
+      } catch (error) {
+        setStatus("celioNumberStatus", "Copy wasn't available. Select and copy the number manually.", "error");
+      }
+    });
+
     /* Profile picture selection and circular crop editor */
     let selectedProfileImage = null;
     let cropObjectUrl = null;
@@ -2091,10 +2158,12 @@
           return;
         }
 
+        currentProfile = await ensureCelioNumber(currentProfile);
+        $("profileCelioNumber").textContent = formatCelioNumber(currentProfile.celioNumber);
         $("accountName").textContent = currentProfile.username || "Celio user";
         renderAvatarInto($("accountAvatar"), currentProfile);
         renderAvatarInto($("profileAvatarButton"), currentProfile);
-        $("accountId").textContent = "Account ID: " + user.uid;
+        $("accountId").textContent = formatCelioNumber(currentProfile.celioNumber);
         $("authScreen").classList.add("hidden");
         $("appScreen").classList.remove("hidden");
 
