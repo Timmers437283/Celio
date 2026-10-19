@@ -18,6 +18,7 @@
       --blue: #0a84ff;
       --danger: #ff5555;
       --incoming: #202020;
+      --speaking: #2ecc71;
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); font: 14px "Google Sans", Arial, sans-serif; }
@@ -121,6 +122,7 @@
 
     .chat-panel { height: calc(100vh - 70px); min-height: 350px; display: flex; flex-direction: column; }
     .chat-header { padding: 15px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+    .chat-header .secondary { padding: 9px 12px; }
     .chat-header-info { min-width: 0; flex: 1; }
     .chat-header-name { font-weight: 600; }
     .chat-header-subtitle { min-height: 14px; margin-top: 4px; color: var(--muted); font-size: 12px; }
@@ -169,6 +171,36 @@
     .typing-indicator span:nth-child(3) { animation-delay: .3s; }
     .upload-track { height: 3px; margin: 0 24px 8px; overflow: hidden; background: #292929; border-radius: 3px; }
     .upload-fill { width: 0; height: 100%; background: var(--blue); transition: width .15s; }
+
+    /* Voice and video calls */
+    .incoming-call { position: fixed; top: 16px; left: 50%; z-index: 150; width: min(92vw, 400px); padding: 12px 14px; display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid #303030; border-radius: 10px; transform: translateX(-50%); }
+    .incoming-call-info { min-width: 0; flex: 1; }
+    .incoming-call-title { font-weight: 600; overflow-wrap: anywhere; }
+    .incoming-call-text { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .incoming-call-actions { display: flex; gap: 6px; }
+    .incoming-call-actions button { padding: 9px 12px; border-radius: 8px; }
+
+    .call-overlay { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; background: var(--bg); }
+    .call-top { padding: 18px 24px; text-align: center; border-bottom: 1px solid var(--border); }
+    .call-title { font-weight: 600; }
+    .call-status { margin-top: 5px; min-height: 18px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+    .call-stage { flex: 1; min-height: 0; padding: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center; }
+    .call-tile { min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+    .call-ring { padding: 6px; border: 3px solid transparent; border-radius: 50%; transition: border-color .15s; }
+    .call-avatar { width: 128px; height: 128px; font-size: 48px; }
+    .call-name { max-width: 100%; font-weight: 600; font-size: 16px; text-align: center; overflow-wrap: anywhere; }
+    .call-tile video { display: none; width: 100%; max-height: calc(100dvh - 250px); aspect-ratio: 4 / 3; object-fit: cover; background: #080808; border: 3px solid var(--border); border-radius: 10px; transition: border-color .15s; }
+    #localVideo { transform: scaleX(-1); }
+    .call-tile.has-video video { display: block; }
+    .call-tile.has-video .call-ring { display: none; }
+    .call-tile.speaking .call-ring, .call-tile.speaking video { border-color: var(--speaking); }
+    .call-controls { padding: 16px; display: flex; justify-content: center; gap: 10px; border-top: 1px solid var(--border); }
+    .call-controls .secondary { min-width: 104px; }
+    .call-controls .secondary.active { background: #3a3a3a; }
+    .end-call { min-width: 104px; padding: 10px 18px; background: #c62828; color: #fff; border-radius: 8px; font-weight: 600; }
+    .end-call:hover { background: #d93636; }
+    .call-toast { position: fixed; bottom: 20px; left: 50%; z-index: 300; max-width: 92vw; padding: 10px 14px; background: #202020; border: 1px solid #303030; border-radius: 8px; line-height: 1.45; transform: translateX(-50%); }
+
     @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
     @keyframes messageIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
@@ -186,7 +218,8 @@
       .topbar { height: 58px; padding: 0 12px; gap: 10px; }
       .content { padding: 22px 16px; }
       .chat-panel { height: 65vh; min-height: 380px; }
-      .chat-header { padding: 13px 16px; }
+      .chat-header { padding: 13px 12px; gap: 8px; }
+      .chat-header .secondary { padding: 9px 10px; }
       .messages { padding: 18px 14px; }
       .composer { padding: 12px; gap: 7px; }
       .list-item { padding: 11px; }
@@ -197,6 +230,11 @@
       .message-image-link .message-media { max-width: min(100%, 380px); }
       .youtube-preview { max-width: min(100%, 300px); }
       .upload-track { margin-right: 12px; margin-left: 12px; }
+      .call-stage { padding: 16px; gap: 12px; }
+      .call-avatar { width: 96px; height: 96px; font-size: 36px; }
+      .call-stage.video { grid-template-columns: 1fr; grid-auto-rows: minmax(0, 1fr); }
+      .call-stage.video .call-tile video { max-height: 34dvh; }
+      .call-controls .secondary, .end-call { min-width: 0; flex: 1; }
     }
 
     /* Right-side overlay workspace menu */
@@ -373,6 +411,8 @@
               <div id="chatFriendName" class="chat-header-name">Conversation</div>
               <div id="chatSubtitle" class="chat-header-subtitle">Direct message</div>
             </div>
+            <button id="voiceCallButton" class="secondary" type="button" disabled title="Start a voice call">Voice</button>
+            <button id="videoCallButton" class="secondary" type="button" disabled title="Start a video call">Video</button>
           </header>
           <div id="messagesList" class="messages"><div class="chat-empty">Loading messages...</div></div>
           <div id="uploadTrack" class="upload-track hidden" aria-label="Upload progress"><div id="uploadFill" class="upload-fill"></div></div>
@@ -401,6 +441,46 @@
     </div>
   </div>
 
+  <!-- Incoming call banner -->
+  <div id="incomingCall" class="incoming-call hidden" role="alertdialog" aria-live="assertive" aria-label="Incoming call">
+    <div class="avatar" id="incomingCallAvatar">?</div>
+    <div class="incoming-call-info">
+      <div id="incomingCallTitle" class="incoming-call-title">Someone</div>
+      <div id="incomingCallText" class="incoming-call-text">Incoming call</div>
+    </div>
+    <div class="incoming-call-actions">
+      <button id="declineCallButton" class="danger" type="button">Decline</button>
+      <button id="acceptCallButton" class="primary" type="button">Accept</button>
+    </div>
+  </div>
+
+  <!-- Call screen -->
+  <div id="callOverlay" class="call-overlay hidden" role="dialog" aria-modal="true" aria-label="Call">
+    <div class="call-top">
+      <div id="callTitle" class="call-title">Call</div>
+      <div id="callStatus" class="call-status" aria-live="polite"></div>
+    </div>
+    <div id="callStage" class="call-stage voice">
+      <div id="localTile" class="call-tile">
+        <div class="call-ring"><div id="localCallAvatar" class="avatar call-avatar">?</div></div>
+        <video id="localVideo" autoplay playsinline muted></video>
+        <div id="localCallName" class="call-name">You</div>
+      </div>
+      <div id="remoteTile" class="call-tile">
+        <div class="call-ring"><div id="remoteCallAvatar" class="avatar call-avatar">?</div></div>
+        <video id="remoteVideo" autoplay playsinline muted></video>
+        <div id="remoteCallName" class="call-name">Friend</div>
+      </div>
+    </div>
+    <div class="call-controls">
+      <button id="muteButton" class="secondary" type="button">Mute</button>
+      <button id="cameraButton" class="secondary hidden" type="button">Camera off</button>
+      <button id="endCallButton" class="end-call" type="button">End</button>
+    </div>
+  </div>
+  <audio id="remoteAudio" autoplay></audio>
+  <div id="callToast" class="call-toast hidden" role="status" aria-live="polite"></div>
+
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
@@ -427,6 +507,13 @@
     const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
     const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
 
+    /* Calls use the browser's built-in WebRTC. STUN helps two browsers find each other. */
+    const RTC_CONFIG = {
+      iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }]
+    };
+    const RING_TIMEOUT_MS = 45000;
+    const STALE_CALL_MS = 90000;
+
     let currentUser = null;
     let currentProfile = null;
     let creatingAccount = false;
@@ -437,12 +524,19 @@
     let requestsUnsubscribe = null;
     let messagesUnsubscribe = null;
     let typingUnsubscribe = null;
+    let incomingCallsUnsubscribe = null;
     let typingTimer = null;
     let typingStopTimer = null;
     let friendsCache = [];
     let requestsCache = [];
     let sendingMessage = false;
     let friendIsTyping = false;
+
+    /* Call state */
+    let call = null;
+    let incomingCall = null;
+    let callHideTimer = null;
+    let toastTimer = null;
 
     const deletingMessages = new Set();
     const receiptUpdates = new Set();
@@ -627,6 +721,573 @@
       if (["permission-denied", "firestore/permission-denied"].includes(error?.code)) return "Firebase blocked this action. Check the Firestore security rules.";
       if (error?.code === "unavailable") return "Firebase is temporarily unavailable. Try again.";
       return error?.message || "Something went wrong. Please try again.";
+    }
+
+    /* ---------- Voice and video calls ---------- */
+
+    function showToast(message) {
+      const toast = $("callToast");
+      toast.textContent = message;
+      toast.classList.remove("hidden");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.add("hidden"), 4500);
+    }
+
+    function mediaErrorMessage(error) {
+      const name = error?.name;
+      if (name === "NotAllowedError" || name === "SecurityError") return "Allow microphone and camera access in your browser to make calls.";
+      if (name === "NotFoundError" || name === "OverconstrainedError") return "No microphone or camera was found on this device.";
+      if (name === "NotReadableError") return "Your microphone or camera is being used by another app.";
+      return friendlyError(error);
+    }
+
+    function setCallButtonsDisabled(disabled) {
+      $("voiceCallButton").disabled = disabled;
+      $("videoCallButton").disabled = disabled;
+    }
+
+    function updateCallStatus(text) {
+      $("callStatus").textContent = text || "";
+    }
+
+    function setSpeaking(side, on) {
+      $(side === "local" ? "localTile" : "remoteTile").classList.toggle("speaking", Boolean(on));
+    }
+
+    /* Watches an audio stream and reports when someone is talking. */
+    function createSpeakingMonitor(stream, onChange) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass || !stream.getAudioTracks().length) return { stop() {} };
+
+      let context = null;
+      let source = null;
+      let timer = null;
+      let speaking = false;
+
+      try {
+        context = new AudioContextClass();
+        if (context.resume) context.resume().catch(() => {});
+        source = context.createMediaStreamSource(stream);
+
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+
+        const data = new Uint8Array(analyser.fftSize);
+        let lastLoud = 0;
+
+        timer = setInterval(() => {
+          analyser.getByteTimeDomainData(data);
+
+          let sum = 0;
+          for (let i = 0; i < data.length; i++) {
+            const value = (data[i] - 128) / 128;
+            sum += value * value;
+          }
+
+          const level = Math.sqrt(sum / data.length);
+          const now = performance.now();
+          if (level > 0.02) lastLoud = now;
+
+          /* Stay green for a moment after the last sound so it doesn't flicker. */
+          const next = now - lastLoud < 350;
+          if (next !== speaking) {
+            speaking = next;
+            onChange(speaking);
+          }
+        }, 100);
+      } catch (error) {
+        console.error("Speaking detection unavailable:", error);
+      }
+
+      return {
+        stop() {
+          if (timer) clearInterval(timer);
+          try { if (source) source.disconnect(); } catch {}
+          try { if (context) context.close(); } catch {}
+          if (speaking) onChange(false);
+          speaking = false;
+        }
+      };
+    }
+
+    function openCallUi(c, statusText) {
+      clearTimeout(callHideTimer);
+
+      const peerName = c.peerProfile?.username || "Friend";
+      const myName = currentProfile?.username || "You";
+
+      $("callStage").className = "call-stage " + c.type;
+      $("callTitle").textContent = (c.type === "video" ? "Video call with " : "Voice call with ") + peerName;
+
+      renderAvatarInto($("localCallAvatar"), currentProfile);
+      renderAvatarInto($("remoteCallAvatar"), c.peerProfile || { username: peerName });
+      $("localCallName").textContent = myName + " (You)";
+      $("remoteCallName").textContent = peerName;
+
+      $("localVideo").srcObject = c.localStream;
+      $("localTile").classList.toggle("has-video", c.type === "video");
+      $("remoteTile").classList.remove("has-video");
+      setSpeaking("local", false);
+      setSpeaking("remote", false);
+
+      $("muteButton").textContent = "Mute";
+      $("muteButton").classList.remove("active");
+      $("cameraButton").textContent = "Camera off";
+      $("cameraButton").classList.remove("active");
+      $("cameraButton").classList.toggle("hidden", c.type !== "video");
+
+      updateCallStatus(statusText);
+      $("callOverlay").classList.remove("hidden");
+
+      c.localMonitor = createSpeakingMonitor(c.localStream, on => setSpeaking("local", on));
+    }
+
+    function hideCallUi() {
+      $("callOverlay").classList.add("hidden");
+      $("localVideo").srcObject = null;
+      $("remoteVideo").srcObject = null;
+      $("remoteAudio").srcObject = null;
+      $("localTile").classList.remove("has-video", "speaking");
+      $("remoteTile").classList.remove("has-video", "speaking");
+      updateCallStatus("");
+    }
+
+    function refreshRemoteVideo(c) {
+      $("remoteTile").classList.toggle(
+        "has-video",
+        c.type === "video" && c.remoteHasVideo === true && c.remoteCameraOn !== false
+      );
+    }
+
+    function sendCallState(c) {
+      if (c.channel && c.channel.readyState === "open") {
+        try { c.channel.send(JSON.stringify({ camera: c.cameraOn })); } catch {}
+      }
+    }
+
+    function startCallTimer(c) {
+      if (c.timer || call !== c) return;
+      clearTimeout(c.ringTimer);
+      c.connectedAt = Date.now();
+
+      const tick = () => {
+        const seconds = Math.floor((Date.now() - c.connectedAt) / 1000);
+        updateCallStatus(String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0"));
+      };
+
+      tick();
+      c.timer = setInterval(tick, 1000);
+    }
+
+    function createPeer(c) {
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      c.pc = pc;
+      c.queued = [];
+      c.remoteStream = new MediaStream();
+
+      /* The audio element plays the friend's voice. The video element is muted so nothing plays twice. */
+      $("remoteAudio").srcObject = c.remoteStream;
+      $("remoteVideo").srcObject = c.remoteStream;
+
+      c.localStream.getTracks().forEach(track => pc.addTrack(track, c.localStream));
+
+      /* Small side channel so each person knows when the other turns their camera off. */
+      c.channel = pc.createDataChannel("state", { negotiated: true, id: 0 });
+      c.channel.onopen = () => sendCallState(c);
+      c.channel.onmessage = event => {
+        try {
+          const state = JSON.parse(event.data);
+          if (typeof state.camera === "boolean") {
+            c.remoteCameraOn = state.camera;
+            refreshRemoteVideo(c);
+          }
+        } catch {}
+      };
+
+      pc.ontrack = event => {
+        if (call !== c) return;
+        const track = event.track;
+
+        if (!c.remoteStream.getTracks().includes(track)) c.remoteStream.addTrack(track);
+
+        if (track.kind === "audio" && !c.remoteMonitor) {
+          c.remoteMonitor = createSpeakingMonitor(c.remoteStream, on => setSpeaking("remote", on));
+        }
+
+        if (track.kind === "video") {
+          c.remoteHasVideo = true;
+          refreshRemoteVideo(c);
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (call !== c) return;
+        const state = pc.connectionState;
+
+        if (state === "connected") startCallTimer(c);
+        else if (state === "disconnected") updateCallStatus("Reconnecting...");
+        else if (state === "failed") endCall("Connection lost.");
+      };
+
+      return pc;
+    }
+
+    async function addRemoteCandidate(c, data) {
+      if (!c.pc || !c.pc.remoteDescription) {
+        c.queued.push(data);
+        return;
+      }
+
+      try {
+        await c.pc.addIceCandidate(new RTCIceCandidate(data));
+      } catch (error) {
+        console.error("Could not add ICE candidate:", error);
+      }
+    }
+
+    async function flushCandidates(c) {
+      const waiting = c.queued.splice(0);
+      for (const data of waiting) await addRemoteCandidate(c, data);
+    }
+
+    function getCallMedia(type) {
+      return navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+        video: type === "video" ? { facingMode: "user" } : false
+      });
+    }
+
+    function callSupported() {
+      return Boolean(navigator.mediaDevices?.getUserMedia && window.RTCPeerConnection);
+    }
+
+    /* Local cleanup. Safe to call more than once. */
+    function finishCall(message) {
+      const c = call;
+      if (!c || c.finished) return;
+
+      c.finished = true;
+      call = null;
+
+      clearTimeout(c.ringTimer);
+      clearInterval(c.timer);
+      c.unsubs.forEach(unsubscribe => { try { unsubscribe(); } catch {} });
+
+      try { if (c.channel) c.channel.close(); } catch {}
+      if (c.localMonitor) c.localMonitor.stop();
+      if (c.remoteMonitor) c.remoteMonitor.stop();
+      if (c.localStream) c.localStream.getTracks().forEach(track => track.stop());
+      try { if (c.pc) c.pc.close(); } catch {}
+
+      setSpeaking("local", false);
+      setSpeaking("remote", false);
+      updateCallStatus(message || "");
+
+      clearTimeout(callHideTimer);
+      callHideTimer = setTimeout(hideCallUi, message ? 1500 : 0);
+
+      setCallButtonsDisabled(!activeChatId);
+    }
+
+    /* Ends the call for both people. */
+    async function endCall(message = "Call ended.") {
+      const c = call;
+      if (!c) return;
+
+      let pending = null;
+      if (c.ref) {
+        pending = c.ref.update({ status: "ended", endedAt: serverTimestamp() }).catch(() => {});
+      }
+
+      finishCall(message);
+      if (pending) await pending;
+    }
+
+    async function startCall(type) {
+      if (call || incomingCall) {
+        showToast("You're already in a call.");
+        return;
+      }
+
+      if (!currentUser || !activeChatId || !activeFriendId) return;
+
+      if (!callSupported()) {
+        showToast("This browser doesn't support voice or video calls.");
+        return;
+      }
+
+      const chatId = activeChatId;
+      const friendId = activeFriendId;
+
+      const c = {
+        role: "caller",
+        type,
+        peerId: friendId,
+        unsubs: [],
+        queued: [],
+        micOn: true,
+        cameraOn: type === "video",
+        remoteCameraOn: true,
+        remoteHasVideo: false
+      };
+
+      call = c;
+      setCallButtonsDisabled(true);
+      setStatus("chatStatus", "");
+
+      try {
+        await verifyChat(chatId, friendId);
+
+        c.peerProfile = (await getProfile(friendId)) || { username: $("chatFriendName").textContent };
+        c.localStream = await getCallMedia(type);
+
+        if (call !== c) {
+          c.localStream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        openCallUi(c, "Calling...");
+        createPeer(c);
+
+        const callRef = db.collection("calls").doc();
+        c.id = callRef.id;
+        c.ref = callRef;
+
+        /* Candidates can appear before the call document exists, so hold them briefly. */
+        let ready = false;
+        const pending = [];
+        const sendCandidate = data => {
+          callRef.collection("callerCandidates").add(data).catch(error => console.error("Candidate error:", error));
+        };
+
+        c.pc.onicecandidate = event => {
+          if (!event.candidate) return;
+          const data = event.candidate.toJSON();
+          if (ready) sendCandidate(data); else pending.push(data);
+        };
+
+        const offer = await c.pc.createOffer();
+        await c.pc.setLocalDescription(offer);
+
+        await callRef.set({
+          callerId: currentUser.uid,
+          calleeId: friendId,
+          callerName: currentProfile.username,
+          calleeName: c.peerProfile.username || "",
+          type,
+          status: "ringing",
+          offer: { type: offer.type, sdp: offer.sdp },
+          createdAt: serverTimestamp()
+        });
+
+        ready = true;
+        pending.splice(0).forEach(sendCandidate);
+
+        c.ringTimer = setTimeout(() => {
+          if (call === c && !c.answered) endCall("No answer.");
+        }, RING_TIMEOUT_MS);
+
+        c.unsubs.push(callRef.onSnapshot(snapshot => {
+          if (call !== c || !snapshot.exists) return;
+          const data = snapshot.data();
+
+          if (data.answer && !c.answered) {
+            c.answered = true;
+            updateCallStatus("Connecting...");
+
+            c.pc.setRemoteDescription(new RTCSessionDescription(data.answer))
+              .then(() => flushCandidates(c))
+              .catch(error => {
+                console.error("Answer error:", error);
+                endCall("Could not connect the call.");
+              });
+          }
+
+          if (data.status === "declined") finishCall("Call declined.");
+          else if (data.status === "ended") finishCall("Call ended.");
+        }, error => console.error("Call listener error:", error)));
+
+        c.unsubs.push(callRef.collection("calleeCandidates").onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === "added" && call === c) addRemoteCandidate(c, change.doc.data());
+          });
+        }, error => console.error("Candidate listener error:", error)));
+      } catch (error) {
+        console.error("Start call error:", error);
+        if (call === c) await endCall("");
+        showToast(mediaErrorMessage(error));
+      }
+    }
+
+    function hideIncomingCall() {
+      incomingCall = null;
+      $("incomingCall").classList.add("hidden");
+    }
+
+    async function showIncomingCall(id, ref, data) {
+      incomingCall = { id, ref, data };
+
+      $("incomingCallTitle").textContent = data.callerName || "Someone";
+      $("incomingCallText").textContent = data.type === "video" ? "Incoming video call" : "Incoming voice call";
+      renderAvatarInto($("incomingCallAvatar"), { username: data.callerName });
+      $("incomingCall").classList.remove("hidden");
+
+      /* Prefer the caller's real profile over the name written in the call. */
+      try {
+        const profile = await getProfile(data.callerId);
+        if (profile && incomingCall && incomingCall.id === id) {
+          $("incomingCallTitle").textContent = profile.username || "Someone";
+          renderAvatarInto($("incomingCallAvatar"), profile);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    function startIncomingCallsListener() {
+      if (incomingCallsUnsubscribe) incomingCallsUnsubscribe();
+
+      incomingCallsUnsubscribe = db.collection("calls")
+        .where("calleeId", "==", currentUser.uid)
+        .where("status", "==", "ringing")
+        .onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
+            const doc = change.doc;
+
+            if (change.type === "removed") {
+              if (incomingCall && incomingCall.id === doc.id) hideIncomingCall();
+              return;
+            }
+
+            if (change.type !== "added") return;
+            if (incomingCall && incomingCall.id === doc.id) return;
+
+            const data = doc.data();
+            const created = data.createdAt && typeof data.createdAt.toMillis === "function" ? data.createdAt.toMillis() : null;
+
+            /* Ignore calls that were left ringing long ago. */
+            if (created && Date.now() - created > STALE_CALL_MS) return;
+
+            /* Already busy: tell the caller. */
+            if (call || incomingCall) {
+              doc.ref.update({ status: "declined", endedAt: serverTimestamp() }).catch(() => {});
+              return;
+            }
+
+            showIncomingCall(doc.id, doc.ref, data);
+          });
+        }, error => console.error("Incoming call listener error:", error));
+    }
+
+    async function acceptIncomingCall() {
+      const incoming = incomingCall;
+      if (!incoming || call) return;
+
+      hideIncomingCall();
+
+      const data = incoming.data;
+      const type = data.type === "video" ? "video" : "voice";
+
+      const c = {
+        role: "callee",
+        type,
+        peerId: data.callerId,
+        id: incoming.id,
+        ref: incoming.ref,
+        unsubs: [],
+        queued: [],
+        micOn: true,
+        cameraOn: type === "video",
+        remoteCameraOn: true,
+        remoteHasVideo: false,
+        answered: true
+      };
+
+      call = c;
+      setCallButtonsDisabled(true);
+
+      try {
+        const fresh = await incoming.ref.get();
+        if (!fresh.exists || fresh.data().status !== "ringing") {
+          throw new Error("This call is no longer available.");
+        }
+
+        c.peerProfile = (await getProfile(data.callerId)) || { username: data.callerName || "Friend" };
+        c.localStream = await getCallMedia(type);
+
+        if (call !== c) {
+          c.localStream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        openCallUi(c, "Connecting...");
+        createPeer(c);
+
+        c.pc.onicecandidate = event => {
+          if (!event.candidate) return;
+          incoming.ref.collection("calleeCandidates").add(event.candidate.toJSON())
+            .catch(error => console.error("Candidate error:", error));
+        };
+
+        await c.pc.setRemoteDescription(new RTCSessionDescription(fresh.data().offer));
+        const answer = await c.pc.createAnswer();
+        await c.pc.setLocalDescription(answer);
+
+        await incoming.ref.update({
+          answer: { type: answer.type, sdp: answer.sdp },
+          status: "active",
+          answeredAt: serverTimestamp()
+        });
+
+        await flushCandidates(c);
+
+        c.unsubs.push(incoming.ref.onSnapshot(snapshot => {
+          if (call !== c || !snapshot.exists) return;
+          const status = snapshot.data().status;
+          if (status === "ended" || status === "declined") finishCall("Call ended.");
+        }, error => console.error("Call listener error:", error)));
+
+        c.unsubs.push(incoming.ref.collection("callerCandidates").onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === "added" && call === c) addRemoteCandidate(c, change.doc.data());
+          });
+        }, error => console.error("Candidate listener error:", error)));
+      } catch (error) {
+        console.error("Accept call error:", error);
+        if (call === c) await endCall("");
+        showToast(mediaErrorMessage(error));
+      }
+    }
+
+    function declineIncomingCall() {
+      const incoming = incomingCall;
+      if (!incoming) return;
+
+      hideIncomingCall();
+      incoming.ref.update({ status: "declined", endedAt: serverTimestamp() }).catch(() => {});
+    }
+
+    function toggleMute() {
+      const c = call;
+      if (!c || !c.localStream) return;
+
+      c.micOn = !c.micOn;
+      c.localStream.getAudioTracks().forEach(track => { track.enabled = c.micOn; });
+      $("muteButton").textContent = c.micOn ? "Mute" : "Unmute";
+      $("muteButton").classList.toggle("active", !c.micOn);
+    }
+
+    function toggleCamera() {
+      const c = call;
+      if (!c || !c.localStream || c.type !== "video") return;
+
+      c.cameraOn = !c.cameraOn;
+      c.localStream.getVideoTracks().forEach(track => { track.enabled = c.cameraOn; });
+      $("localTile").classList.toggle("has-video", c.cameraOn);
+      $("cameraButton").textContent = c.cameraOn ? "Camera off" : "Camera on";
+      $("cameraButton").classList.toggle("active", !c.cameraOn);
+      sendCallState(c);
     }
 
     /* Typing indicator */
@@ -815,7 +1476,7 @@
     }
 
     function stopListeners() {
-      [friendsUnsubscribe, requestsUnsubscribe, messagesUnsubscribe, typingUnsubscribe].forEach(unsubscribe => {
+      [friendsUnsubscribe, requestsUnsubscribe, messagesUnsubscribe, typingUnsubscribe, incomingCallsUnsubscribe].forEach(unsubscribe => {
         if (unsubscribe) unsubscribe();
       });
 
@@ -823,6 +1484,10 @@
       requestsUnsubscribe = null;
       messagesUnsubscribe = null;
       typingUnsubscribe = null;
+      incomingCallsUnsubscribe = null;
+
+      hideIncomingCall();
+      if (call) endCall("");
 
       stopAllUnreadListeners();
       stopTypingTimers();
@@ -840,6 +1505,7 @@
       activeChatId = null;
       activeFriendId = null;
       friendIsTyping = false;
+      setCallButtonsDisabled(true);
       $("messagesList").replaceChildren();
     }
 
@@ -1634,6 +2300,7 @@
       $("messageInput").disabled = true;
       $("sendButton").disabled = true;
       $("attachButton").disabled = true;
+      setCallButtonsDisabled(true);
       setStatus("chatStatus", "");
 
       try {
@@ -1670,6 +2337,7 @@
         $("messageInput").disabled = false;
         $("sendButton").disabled = false;
         $("attachButton").disabled = false;
+        setCallButtonsDisabled(Boolean(call));
 
         startTypingListener(chatId, friendId);
 
@@ -2043,6 +2711,15 @@
     $("friendSearchForm").addEventListener("submit", searchUsers);
     $("messageForm").addEventListener("submit", sendMessage);
 
+    /* Call buttons */
+    $("voiceCallButton").addEventListener("click", () => startCall("voice"));
+    $("videoCallButton").addEventListener("click", () => startCall("video"));
+    $("acceptCallButton").addEventListener("click", acceptIncomingCall);
+    $("declineCallButton").addEventListener("click", declineIncomingCall);
+    $("muteButton").addEventListener("click", toggleMute);
+    $("cameraButton").addEventListener("click", toggleCamera);
+    $("endCallButton").addEventListener("click", () => endCall("Call ended."));
+
     $("changeNameForm").addEventListener("submit", async event => {
       event.preventDefault();
       if (!currentUser || !currentProfile) return;
@@ -2299,6 +2976,7 @@
     });
 
     $("signOutButton").addEventListener("click", async () => {
+      await endCall("");
       closeActiveChat();
       stopListeners();
       await auth.signOut();
@@ -2374,6 +3052,7 @@
         showPage("friends");
         startFriendsListener();
         startRequestsListener();
+        startIncomingCallsListener();
       } catch (error) {
         console.error(error);
         setStatus("authStatus", friendlyError(error), "error");
