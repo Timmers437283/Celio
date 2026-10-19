@@ -921,14 +921,30 @@
         }
       };
 
-      pc.onconnectionstatechange = () => {
-        if (call !== c) return;
-        const state = pc.connectionState;
+      
+pc.oniceconnectionstatechange = () => {
+  console.log("Celio ICE state:", pc.iceConnectionState);
+};
 
-        if (state === "connected") startCallTimer(c);
-        else if (state === "disconnected") updateCallStatus("Reconnecting...");
-        else if (state === "failed") endCall("Connection lost.");
-      };
+pc.onicegatheringstatechange = () => {
+  console.log("Celio ICE gathering:", pc.iceGatheringState);
+};
+
+pc.onconnectionstatechange = () => {
+  if (call !== c) return;
+
+  const state = pc.connectionState;
+  console.log("Celio peer state:", state);
+
+  if (state === "connected") {
+    startCallTimer(c);
+  } else if (state === "disconnected") {
+    updateCallStatus("Reconnecting...");
+  } else if (state === "failed") {
+    updateCallStatus("Connection failed.");
+  }
+};
+
 
       return pc;
     }
