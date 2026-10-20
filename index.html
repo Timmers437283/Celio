@@ -43,6 +43,7 @@
     .brand { margin-bottom: 8px; font-size: 30px; font-weight: 700; letter-spacing: -1.3px; }
     .auth-card h1 { margin: 32px 0 8px; font-size: 22px; font-weight: 600; }
     .auth-card p { margin-bottom: 24px; color: var(--muted); line-height: 1.5; }
+    .auth-card p.status { margin-bottom: 0; }
     .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
     .field label { color: #d0d0d0; }
     .auth-card .primary { width: 100%; margin-top: 5px; }
@@ -303,19 +304,22 @@
             <label for="usernameInput">Username</label>
             <input id="usernameInput" autocomplete="username" maxlength="24" placeholder="Choose a username">
           </div>
-          <div class="field">
+          <div id="emailField" class="field">
             <label for="emailInput">Email</label>
             <input id="emailInput" type="email" autocomplete="email" required placeholder="you@example.com">
           </div>
-          <div class="field">
+          <div id="passwordField" class="field">
             <label for="passwordInput">Password</label>
             <input id="passwordInput" type="password" autocomplete="current-password" minlength="6" required placeholder="Enter your password">
           </div>
           <button id="authSubmit" class="primary" type="submit">Sign in</button>
         </form>
-        <div class="auth-switch">
+        <div id="authSwitchRow" class="auth-switch">
           <span id="switchText">New to Celio?</span>
           <button id="switchAuth" class="text-button" type="button">Create account</button>
+        </div>
+        <div id="setupRow" class="auth-switch hidden">
+          <button id="cancelSetupButton" class="text-button" type="button">Sign out instead</button>
         </div>
         <p id="authStatus" class="status" aria-live="polite"></p>
       </div>
@@ -506,27 +510,13 @@
     const CLOUDINARY_UPLOAD_PRESET = "celio_uploads";
     const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
     const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
+    const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,24}$/;
+    const USERNAME_HELP = "Usernames must be 3–24 characters and use only letters, numbers, and underscores.";
 
     /* Calls use the browser's built-in WebRTC. STUN helps two browsers find each other. */
     const RTC_CONFIG = {
-  iceServers: [
-    {
-      urls: [
-        "stun:stun.relay.metered.ca:80"
-      ]
-    },
-    {
-      urls: [
-        "turn:us.relay.metered.ca:80",
-        "turn:us.relay.metered.ca:80?transport=tcp",
-        "turn:us.relay.metered.ca:443",
-        "turns:us.relay.metered.ca:443?transport=tcp"
-      ],
-      username: "e71eba98d6a4196118021445",
-      credential: "tlG7SC1LPLYpZMj4"
-    }
-  ]
-};
+      iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }]
+    };
     const RING_TIMEOUT_MS = 45000;
     const STALE_CALL_MS = 90000;
 
@@ -534,6 +524,7 @@
     let currentProfile = null;
     let creatingAccount = false;
     let signupInProgress = false;
+    let setupUser = null;
     let activeChatId = null;
     let activeFriendId = null;
     let friendsUnsubscribe = null;
@@ -573,6 +564,54 @@
       return username.trim().toLowerCase();
     }
 
+    /* ---------- Errors and diagnostics ---------- */
+
+    /* expected = a normal outcome (e.g. username taken) rather than a bug or a rules problem. */
+    function celioError(code, message, expected = false) {
+      const error = new Error(message);
+      error.code = code;
+      error.expected = expected;
+      return error;
+    }
+
+    /*
+      Runs one named operation. If it fails, the real Firebase error is logged to the console
+      together with the name of the operation, and the error is rethrown with that name attached
+      so the interface can say what was being attempted.
+    */
+    async function step(name, action) {
+      try {
+        return await action();
+      } catch (error) {
+        const failure = error && typeof error === "object" ? error : new Error(String(error));
+        if (!failure.celioStep) {
+          try { failure.celioStep = name; } catch {}
+        }
+        const log = failure.expected ? console.warn : console.error;
+        log.call(console, `[Celio] "${name}" failed:`, failure.code || "(no error code)", failure.message, failure);
+        throw failure;
+      }
+    }
+
+    function friendlyError(error) {
+      const where = error?.celioStep ? ` while trying to ${error.celioStep}` : "";
+
+      if (error?.code === "auth/email-already-in-use") return "That email already has an account. Try signing in.";
+      if (error?.code === "auth/invalid-email") return "Enter a valid email address.";
+      if (error?.code === "auth/weak-password") return "Your password must be at least 6 characters.";
+      if (["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(error?.code)) return "Email or password is incorrect.";
+      if (["auth/api-key-not-valid", "auth/invalid-api-key", "auth/invalid-api-key.-please-pass-a-valid-api-key."].includes(error?.code)) return "Firebase rejected the API key. Verify the exact key in Firebase Project settings.";
+      if (error?.code === "auth/unauthorized-domain") return "This website domain is not authorized in Firebase Authentication settings.";
+      if (error?.code === "auth/network-request-failed") return "Network error. Check your connection and try again.";
+      if (error?.code === "auth/too-many-requests") return "Too many attempts. Wait a moment and try again.";
+      if (["permission-denied", "firestore/permission-denied"].includes(error?.code)) {
+        return `Firebase blocked this action${where}. Your Firestore security rules may need updating. Details are in the browser console.`;
+      }
+      if (error?.code === "unavailable") return `Firebase is temporarily unavailable${where}. Try again.`;
+      if (error?.expected) return error.message;
+      return (error?.message || "Something went wrong. Please try again.") + (where ? ` (${where.trim()})` : "");
+    }
+
     /* ---------- Celio numbers ---------- */
 
     function normalizeCelioNumber(value) {
@@ -593,21 +632,16 @@
       return "555" + String(buffer[0] % 10000000).padStart(7, "0");
     }
 
-    function celioError(code, message) {
-      const error = new Error(message);
-      error.code = code;
-      return error;
-    }
-
     /*
-      Claims a Celio number for a user inside ONE Firestore transaction.
+      Runs ONE Firestore transaction that, together:
+        - reserves a unique Celio number in phoneNumbers/{digits}
+        - writes (or updates) the number on the user's profile
+        - for a brand-new profile: also reserves the username in usernames/{lowercase}
+          and creates the profile document
 
-      - phoneNumbers/{digits} is the registry. A document ID can only exist once,
-        and the transaction fails or retries if two people claim the same number.
-      - The user document and the registry entry are written together, so a number
-        can never be stored on a profile without being reserved (or the reverse).
-      - If the user already has a number, it is kept (never regenerated).
-      - If the user document does not exist yet (new signup), newProfile is used to create it.
+      Document IDs are unique, so two people can never reserve the same number or username.
+      An existing number is kept and never regenerated.
+      newProfile is only used when the user document does not exist yet.
     */
     async function claimCelioNumber(uid, newProfile) {
       const userRef = db.collection("users").doc(uid);
@@ -617,36 +651,57 @@
 
         try {
           return await db.runTransaction(async transaction => {
+            /* All reads first, then all writes. */
             const userSnap = await transaction.get(userRef);
+
+            if (!userSnap.exists && !newProfile) {
+              throw new Error("Your profile could not be found.");
+            }
+
             const existing = userSnap.exists ? normalizeCelioNumber(userSnap.data().celioNumber) : "";
             const hasExisting = existing.length === 10;
+
+            let nameRef = null;
+            let nameSnap = null;
+
+            if (!userSnap.exists) {
+              nameRef = db.collection("usernames").doc(newProfile.usernameLower);
+              nameSnap = await transaction.get(nameRef);
+
+              if (nameSnap.exists && nameSnap.data().uid !== uid) {
+                throw celioError("celio/username-taken", "That username is already taken.", true);
+              }
+            }
 
             let number = hasExisting ? existing : candidate;
             let phoneRef = db.collection("phoneNumbers").doc(number);
             let phoneSnap = await transaction.get(phoneRef);
 
-            if (phoneSnap.exists && phoneSnap.data().uid === uid) {
-              /* Already registered to this user. Nothing to change. */
-              return number;
-            }
-
-            if (phoneSnap.exists && hasExisting) {
-              /* Legacy number was somehow given to someone else. Replace it with a new one. */
+            if (phoneSnap.exists && phoneSnap.data().uid !== uid && hasExisting) {
+              /* Legacy number was somehow given to someone else. Try a fresh one. */
               number = candidate;
               phoneRef = db.collection("phoneNumbers").doc(number);
               phoneSnap = await transaction.get(phoneRef);
             }
 
-            if (phoneSnap.exists) {
+            const phoneMine = phoneSnap.exists && phoneSnap.data().uid === uid;
+
+            if (phoneSnap.exists && !phoneMine) {
               throw celioError("celio/taken", "Number already taken.");
             }
 
-            transaction.set(phoneRef, { uid, createdAt: serverTimestamp() });
+            if (!phoneMine) {
+              transaction.set(phoneRef, { uid, createdAt: serverTimestamp() });
+            }
 
             if (userSnap.exists) {
-              transaction.update(userRef, { celioNumber: number });
+              if (number !== existing) transaction.update(userRef, { celioNumber: number });
             } else {
               transaction.set(userRef, { ...newProfile, celioNumber: number });
+            }
+
+            if (nameRef && !nameSnap.exists) {
+              transaction.set(nameRef, { uid, createdAt: serverTimestamp() });
             }
 
             return number;
@@ -684,6 +739,22 @@
         return await numberClaimPromise;
       } finally {
         numberClaimPromise = null;
+      }
+    }
+
+    /* Older accounts have no usernames/{name} entry. Register it quietly so the name is protected too. */
+    async function ensureUsernameRegistered(profile) {
+      const lower = usernameKey(profile?.username || "");
+      if (!currentUser || !lower) return;
+
+      try {
+        const ref = db.collection("usernames").doc(lower);
+        const snapshot = await ref.get();
+        if (!snapshot.exists) {
+          await ref.set({ uid: currentUser.uid, createdAt: serverTimestamp() });
+        }
+      } catch (error) {
+        console.warn("[Celio] Could not register existing username (non-fatal):", error?.code, error?.message);
       }
     }
 
@@ -725,18 +796,6 @@
 
     function chatIdFor(a, b) {
       return [a, b].sort().join("_");
-    }
-
-    function friendlyError(error) {
-      if (error?.code === "auth/email-already-in-use") return "That email already has an account. Try signing in.";
-      if (error?.code === "auth/invalid-email") return "Enter a valid email address.";
-      if (error?.code === "auth/weak-password") return "Your password must be at least 6 characters.";
-      if (["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(error?.code)) return "Email or password is incorrect.";
-      if (["auth/api-key-not-valid", "auth/invalid-api-key", "auth/invalid-api-key.-please-pass-a-valid-api-key."].includes(error?.code)) return "Firebase rejected the API key. Verify the exact key in Firebase Project settings.";
-      if (error?.code === "auth/unauthorized-domain") return "This website domain is not authorized in Firebase Authentication settings.";
-      if (["permission-denied", "firestore/permission-denied"].includes(error?.code)) return "Firebase blocked this action. Check the Firestore security rules.";
-      if (error?.code === "unavailable") return "Firebase is temporarily unavailable. Try again.";
-      return error?.message || "Something went wrong. Please try again.";
     }
 
     /* ---------- Voice and video calls ---------- */
@@ -937,30 +996,14 @@
         }
       };
 
-      
-pc.oniceconnectionstatechange = () => {
-  console.log("Celio ICE state:", pc.iceConnectionState);
-};
+      pc.onconnectionstatechange = () => {
+        if (call !== c) return;
+        const state = pc.connectionState;
 
-pc.onicegatheringstatechange = () => {
-  console.log("Celio ICE gathering:", pc.iceGatheringState);
-};
-
-pc.onconnectionstatechange = () => {
-  if (call !== c) return;
-
-  const state = pc.connectionState;
-  console.log("Celio peer state:", state);
-
-  if (state === "connected") {
-    startCallTimer(c);
-  } else if (state === "disconnected") {
-    updateCallStatus("Reconnecting...");
-  } else if (state === "failed") {
-    updateCallStatus("Connection failed.");
-  }
-};
-
+        if (state === "connected") startCallTimer(c);
+        else if (state === "disconnected") updateCallStatus("Reconnecting...");
+        else if (state === "failed") endCall("Connection lost.");
+      };
 
       return pc;
     }
@@ -1783,7 +1826,7 @@ pc.onconnectionstatechange = () => {
       button.disabled = true;
 
       try {
-        const profile = await findProfileByCelioNumber(digits);
+        const profile = await step("look up a Celio number", () => findProfileByCelioNumber(digits));
 
         if (!profile) {
           renderEmpty("searchResults", "No account found with that Celio number.");
@@ -1795,9 +1838,8 @@ pc.onconnectionstatechange = () => {
           return;
         }
 
-        await renderSearchResult(profile);
+        await step("show the search result", () => renderSearchResult(profile));
       } catch (error) {
-        console.error(error);
         setStatus("friendsStatus", friendlyError(error), "error");
       } finally {
         button.disabled = false;
@@ -1841,14 +1883,14 @@ pc.onconnectionstatechange = () => {
           return;
         }
 
-        await db.collection("friendRequests").add({
+        await step("send the friend request", () => db.collection("friendRequests").add({
           senderId: currentUser.uid,
           receiverId: profile.uid,
           senderUsername: currentProfile.username,
           receiverUsername: profile.username,
           status: "pending",
           createdAt: serverTimestamp()
-        });
+        }));
 
         setStatus("friendsStatus", "Friend request sent.", "success");
         await renderSearchResult(profile);
@@ -1946,7 +1988,7 @@ pc.onconnectionstatechange = () => {
           return;
         }
 
-        await ref.update({ status: "accepted" });
+        await step("accept the friend request", () => ref.update({ status: "accepted" }));
 
         const existingContact = await db.collection("friends").doc(currentUser.uid)
           .collection("contacts").doc(request.senderId).get();
@@ -1959,10 +2001,12 @@ pc.onconnectionstatechange = () => {
         const other = await getProfile(request.senderId);
         const batch = db.batch();
 
+        /* requestId lets the security rules verify that this request was really accepted. */
         batch.set(db.collection("friends").doc(currentUser.uid)
           .collection("contacts").doc(request.senderId), {
             uid: request.senderId,
             username: other?.username || request.senderUsername || "User",
+            requestId: request.id,
             createdAt: serverTimestamp()
           });
 
@@ -1970,23 +2014,22 @@ pc.onconnectionstatechange = () => {
           .collection("contacts").doc(currentUser.uid), {
             uid: currentUser.uid,
             username: currentProfile.username,
+            requestId: request.id,
             createdAt: serverTimestamp()
           });
 
-        await batch.commit();
+        await step("save the new friendship", () => batch.commit());
         setStatus("requestsStatus", "Friend request accepted.", "success");
       } catch (error) {
-        console.error(error);
         setStatus("requestsStatus", friendlyError(error), "error");
       }
     }
 
     async function rejectFriendRequest(request) {
       try {
-        await db.collection("friendRequests").doc(request.id).update({ status: "rejected" });
+        await step("decline the friend request", () => db.collection("friendRequests").doc(request.id).update({ status: "rejected" }));
         setStatus("requestsStatus", "Request declined.", "success");
       } catch (error) {
-        console.error(error);
         setStatus("requestsStatus", friendlyError(error), "error");
       }
     }
@@ -2663,21 +2706,146 @@ pc.onconnectionstatechange = () => {
       }
     }
 
-    /* Account forms */
+    /* ---------- Account creation ---------- */
+
+    /* Shows the right wording and fields for sign in, create account, or "finish setup". */
+    function applyAuthMode() {
+      const setup = Boolean(setupUser);
+
+      $("authTitle").textContent = setup ? "Finish setting up" : creatingAccount ? "Create your account" : "Welcome back";
+      $("authDescription").textContent = setup
+        ? "Your sign-in account exists, but your Celio profile isn't saved yet. Choose a username to finish."
+        : creatingAccount
+          ? "Create your Celio account to start connecting."
+          : "Sign in to continue to your conversations.";
+
+      $("usernameField").classList.toggle("hidden", !(creatingAccount || setup));
+      $("usernameInput").required = creatingAccount || setup;
+
+      $("emailField").classList.toggle("hidden", setup);
+      $("passwordField").classList.toggle("hidden", setup);
+      $("emailInput").required = !setup;
+      $("passwordInput").required = !setup;
+      $("passwordInput").autocomplete = creatingAccount ? "new-password" : "current-password";
+
+      $("authSubmit").textContent = setup ? "Finish setup" : creatingAccount ? "Create account" : "Sign in";
+      $("switchText").textContent = creatingAccount ? "Already have an account?" : "New to Celio?";
+      $("switchAuth").textContent = creatingAccount ? "Sign in" : "Create account";
+      $("authSwitchRow").classList.toggle("hidden", setup);
+      $("setupRow").classList.toggle("hidden", !setup);
+    }
+
+    /*
+      The sign-in account exists but the Celio profile could not be saved (or is missing).
+      Nothing is deleted. The person stays signed in and can retry or sign out.
+    */
+    function enterProfileSetup(user, username, message, isError = true) {
+      currentUser = user;
+      currentProfile = null;
+      setupUser = user;
+
+      $("appScreen").classList.add("hidden");
+      $("authScreen").classList.remove("hidden");
+      applyAuthMode();
+      $("usernameInput").value = username || "";
+      setStatus("authStatus", message || "", isError ? "error" : "");
+    }
+
+    /*
+      Creates the Celio profile for a signed-in user.
+      Runs only AFTER authentication, because the security rules only allow signed-in users to read profiles.
+    */
+    async function createProfile(user, rawUsername) {
+      const username = String(rawUsername || "").trim();
+
+      if (!USERNAME_PATTERN.test(username)) {
+        throw celioError("celio/invalid-username", USERNAME_HELP, true);
+      }
+
+      const lower = usernameKey(username);
+
+      /* Friendly early check. The transaction below is what actually guarantees uniqueness. */
+      await step("check that the username is available", async () => {
+        const matching = await db.collection("users")
+          .where("usernameLower", "==", lower).limit(1).get();
+
+        if (matching.docs.some(doc => doc.id !== user.uid)) {
+          throw celioError("celio/username-taken", "That username is already taken.", true);
+        }
+      });
+
+      await step("save your profile, username and Celio number", () => claimCelioNumber(user.uid, {
+        uid: user.uid,
+        username,
+        usernameLower: lower,
+        createdAt: serverTimestamp()
+      }));
+    }
+
+    async function signUp(email, password, username) {
+      if (!USERNAME_PATTERN.test(username)) {
+        throw celioError("celio/invalid-username", USERNAME_HELP, true);
+      }
+
+      /* Keep the auth listener from starting a session before the profile exists. */
+      signupInProgress = true;
+
+      const credential = await step("create your sign-in account", () =>
+        auth.createUserWithEmailAndPassword(email, password)
+      );
+      const user = credential.user;
+
+      try {
+        await createProfile(user, username);
+      } catch (error) {
+        /* The profile write may have committed even though the call reported an error. Check before deciding. */
+        let existingProfile = null;
+        try { existingProfile = await getProfile(user.uid); } catch (lookupError) {
+          console.warn("[Celio] Could not re-check profile after a failed save:", lookupError);
+        }
+
+        if (!existingProfile) {
+          signupInProgress = false;
+          enterProfileSetup(
+            user,
+            username,
+            friendlyError(error) + " Your sign-in account was created. Press Finish setup to try again.",
+            true
+          );
+          return;
+        }
+
+        console.warn("[Celio] Profile exists even though saving reported an error. Continuing.");
+      }
+
+      signupInProgress = false;
+      await startSession(user);
+    }
+
+    async function finishProfileSetup(username) {
+      const user = setupUser;
+
+      if (!user || !auth.currentUser || auth.currentUser.uid !== user.uid) {
+        throw new Error("Your sign-in session ended. Please sign in again.");
+      }
+
+      await createProfile(user, username);
+
+      setupUser = null;
+      applyAuthMode();
+      await startSession(user);
+    }
 
     $("switchAuth").addEventListener("click", () => {
       creatingAccount = !creatingAccount;
-      $("authTitle").textContent = creatingAccount ? "Create your account" : "Welcome back";
-      $("authDescription").textContent = creatingAccount
-        ? "Create your Celio account to start connecting."
-        : "Sign in to continue to your conversations.";
+      applyAuthMode();
+      setStatus("authStatus", "");
+    });
 
-      $("usernameField").classList.toggle("hidden", !creatingAccount);
-      $("usernameInput").required = creatingAccount;
-      $("passwordInput").autocomplete = creatingAccount ? "new-password" : "current-password";
-      $("authSubmit").textContent = creatingAccount ? "Create account" : "Sign in";
-      $("switchText").textContent = creatingAccount ? "Already have an account?" : "New to Celio?";
-      $("switchAuth").textContent = creatingAccount ? "Sign in" : "Create account";
+    $("cancelSetupButton").addEventListener("click", async () => {
+      setupUser = null;
+      try { await auth.signOut(); } catch (error) { console.error("[Celio] Sign out failed:", error); }
+      applyAuthMode();
       setStatus("authStatus", "");
     });
 
@@ -2691,47 +2859,16 @@ pc.onconnectionstatechange = () => {
 
       $("authSubmit").disabled = true;
 
-      let credential = null;
-      let profileSaved = false;
-
       try {
-        if (creatingAccount) {
-          if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
-            throw new Error("Usernames must be 3–24 characters and use only letters, numbers, and underscores.");
-          }
-
-          const lower = usernameKey(username);
-          const matching = await db.collection("users")
-            .where("usernameLower", "==", lower).limit(1).get();
-
-          if (!matching.empty) throw new Error("That username is already taken.");
-
-          /* Keep the auth listener from reacting before the profile and number exist. */
-          signupInProgress = true;
-          credential = await auth.createUserWithEmailAndPassword(email, password);
-
-          /* Creates the profile and reserves a unique number in a single transaction. */
-          await claimCelioNumber(credential.user.uid, {
-            uid: credential.user.uid,
-            username,
-            usernameLower: lower,
-            createdAt: serverTimestamp()
-          });
-
-          profileSaved = true;
-          signupInProgress = false;
-          await startSession(credential.user);
+        if (setupUser) {
+          await finishProfileSetup(username);
+        } else if (creatingAccount) {
+          await signUp(email, password, username);
         } else {
-          await auth.signInWithEmailAndPassword(email, password);
+          await step("sign in", () => auth.signInWithEmailAndPassword(email, password));
         }
       } catch (error) {
-        console.error(error);
         setStatus("authStatus", friendlyError(error), "error");
-
-        if (credential && !profileSaved) {
-          /* Don't leave a half-created account behind. */
-          try { await credential.user.delete(); } catch (deleteError) { console.error(deleteError); }
-        }
       } finally {
         signupInProgress = false;
         $("authSubmit").disabled = false;
@@ -2761,8 +2898,8 @@ pc.onconnectionstatechange = () => {
       const saveButton = $("saveUsernameButton");
       setStatus("settingsStatus", "");
 
-      if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
-        setStatus("settingsStatus", "Usernames must be 3–24 characters and use only letters, numbers, and underscores.", "error");
+      if (!USERNAME_PATTERN.test(username)) {
+        setStatus("settingsStatus", USERNAME_HELP, "error");
         return;
       }
 
@@ -2774,36 +2911,43 @@ pc.onconnectionstatechange = () => {
       saveButton.disabled = true;
 
       try {
-        const matching = await db.collection("users")
-          .where("usernameLower", "==", lower).limit(1).get();
+        const uid = currentUser.uid;
 
-        if (matching.docs.some(doc => doc.id !== currentUser.uid)) {
-          throw new Error("That username is already taken.");
-        }
+        await step("check that the username is available", async () => {
+          const matching = await db.collection("users")
+            .where("usernameLower", "==", lower).limit(1).get();
 
-        const batch = db.batch();
-        batch.update(db.collection("users").doc(currentUser.uid), {
-          username,
-          usernameLower: lower
+          if (matching.docs.some(doc => doc.id !== uid)) {
+            throw celioError("celio/username-taken", "That username is already taken.", true);
+          }
         });
 
-        const contacts = await db.collection("friends").doc(currentUser.uid)
-          .collection("contacts").get();
+        /* Profile and username reservation change together, so names stay unique. */
+        await step("save your new username", () => db.runTransaction(async transaction => {
+          const userRef = db.collection("users").doc(uid);
+          const newRef = db.collection("usernames").doc(lower);
+          const oldLower = usernameKey(currentProfile.username || "");
+          const oldRef = oldLower && oldLower !== lower ? db.collection("usernames").doc(oldLower) : null;
 
-        contacts.forEach(contact => {
-          batch.set(db.collection("friends").doc(contact.id)
-            .collection("contacts").doc(currentUser.uid), { username }, { merge: true });
-        });
+          const newSnap = await transaction.get(newRef);
+          const oldSnap = oldRef ? await transaction.get(oldRef) : null;
 
-        await batch.commit();
+          if (newSnap.exists && newSnap.data().uid !== uid) {
+            throw celioError("celio/username-taken", "That username is already taken.", true);
+          }
+
+          transaction.update(userRef, { username, usernameLower: lower });
+          if (!newSnap.exists) transaction.set(newRef, { uid, createdAt: serverTimestamp() });
+          if (oldSnap && oldSnap.exists && oldSnap.data().uid === uid) transaction.delete(oldRef);
+        }));
+
         currentProfile = { ...currentProfile, username, usernameLower: lower };
         $("accountName").textContent = username;
         renderAvatarInto($("accountAvatar"), currentProfile);
         renderAvatarInto($("profileAvatarButton"), currentProfile);
         setStatus("settingsStatus", "Username updated successfully.", "success");
       } catch (error) {
-        console.error("Username update error:", error);
-        setStatus("settingsStatus", error.message || friendlyError(error), "error");
+        setStatus("settingsStatus", friendlyError(error), "error");
       } finally {
         saveButton.disabled = false;
       }
@@ -2974,7 +3118,7 @@ pc.onconnectionstatechange = () => {
         if (!croppedBlob) throw new Error("Could not process this image. Try another one.");
         $("cropStatus").textContent = "Uploading picture...";
         const avatarUrl = await uploadProfilePicture(croppedBlob);
-        await db.collection("users").doc(currentUser.uid).update({ avatarUrl });
+        await step("save your profile picture", () => db.collection("users").doc(currentUser.uid).update({ avatarUrl }));
         currentProfile = { ...currentProfile, avatarUrl };
         renderAvatarInto($("accountAvatar"), currentProfile);
         renderAvatarInto($("profileAvatarButton"), currentProfile);
@@ -2983,7 +3127,7 @@ pc.onconnectionstatechange = () => {
         setStatus("pictureStatus", "Profile picture updated.", "success");
       } catch (error) {
         console.error("Profile picture update error:", error);
-        $("cropStatus").textContent = error.message || "Could not save the profile picture.";
+        $("cropStatus").textContent = friendlyError(error);
       } finally {
         button.disabled = false;
       }
@@ -3042,7 +3186,7 @@ pc.onconnectionstatechange = () => {
       });
     });
 
-    /* Restore signed-in session */
+    /* Start (or restore) a signed-in session */
 
     async function startSession(user) {
       stopListeners();
@@ -3055,6 +3199,8 @@ pc.onconnectionstatechange = () => {
       friendIsTyping = false;
 
       if (!user) {
+        setupUser = null;
+        applyAuthMode();
         $("appScreen").classList.add("hidden");
         $("authScreen").classList.remove("hidden");
         renderEmpty("friendsList", "Sign in to see your friends.");
@@ -3062,16 +3208,24 @@ pc.onconnectionstatechange = () => {
       }
 
       try {
-        currentProfile = await getProfile(user.uid);
+        currentProfile = await step("load your profile", () => getProfile(user.uid));
 
         if (!currentProfile) {
-          await auth.signOut();
-          setStatus("authStatus", "Your profile could not be found. Please sign in again.", "error");
+          /* Signed in, but no profile document: let the person finish setup instead of signing them out. */
+          enterProfileSetup(
+            user,
+            "",
+            "Your account exists, but your Celio profile hasn't been saved yet. Choose a username to finish setting up.",
+            false
+          );
           return;
         }
 
         /* Existing accounts: keeps the current number, or assigns one exactly once. */
-        currentProfile = await ensureCelioNumber(user.uid, currentProfile);
+        currentProfile = await step("assign your Celio number", () => ensureCelioNumber(user.uid, currentProfile));
+
+        setupUser = null;
+        applyAuthMode();
 
         $("profileCelioNumber").textContent = formatCelioNumber(currentProfile.celioNumber);
         $("accountName").textContent = currentProfile.username || "Celio user";
@@ -3085,9 +3239,16 @@ pc.onconnectionstatechange = () => {
         startFriendsListener();
         startRequestsListener();
         startIncomingCallsListener();
+
+        /* Background, best-effort: protect the existing username too. */
+        ensureUsernameRegistered(currentProfile);
       } catch (error) {
-        console.error(error);
-        setStatus("authStatus", friendlyError(error), "error");
+        /* The real error is already in the console from step(). Show a readable version and return to sign-in. */
+        const message = friendlyError(error);
+        $("appScreen").classList.add("hidden");
+        $("authScreen").classList.remove("hidden");
+        try { await auth.signOut(); } catch (signOutError) { console.error("[Celio] Sign out failed:", signOutError); }
+        setStatus("authStatus", message, "error");
       }
     }
 
