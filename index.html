@@ -204,6 +204,12 @@
     .call-tile.has-video video { display: block; }
     .call-tile.has-video .call-ring { display: none; }
     .call-tile.speaking .call-ring, .call-tile.speaking video { border-color: var(--speaking); }
+    .group-remote-tile { min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; }
+    .group-remote-tile video { width:100%; max-height:calc(100dvh - 250px); aspect-ratio:4/3; object-fit:cover; background:#080808; border:3px solid var(--border); border-radius:5px; }
+    .group-remote-tile .group-remote-avatar { width:96px; height:96px; font-size:36px; }
+    .group-remote-tile .call-name { overflow-wrap:anywhere; }
+    .call-stage.group { grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr)); align-content:center; overflow:auto; }
+    .call-stage.group .call-tile video { max-height:calc(100dvh - 250px); }
     .call-controls { padding: 16px; display: flex; justify-content: center; gap: 10px; border-top: 1px solid var(--border); }
     .call-controls .secondary { min-width: 104px; }
     .call-controls .secondary.active { background: #3a3a3a; }
@@ -336,6 +342,15 @@
     .group-member-option input { width:16px; height:16px; accent-color:var(--blue); }
     .group-member-option span { flex:1; min-width:0; }
     .group-member-option small { display:block; color:var(--muted); margin-top:3px; }
+    .chat-member-row { display:flex; align-items:center; gap:12px; padding:10px; border:1px solid var(--border); background:#0d1016; }
+    .chat-member-avatar { width:38px; height:38px; display:grid; place-items:center; flex-shrink:0; border-radius:5px; background:#202633; color:var(--text); font-weight:600; overflow:hidden; }
+    .chat-member-avatar img { width:100%; height:100%; object-fit:cover; }
+    .chat-member-copy { min-width:0; flex:1; }
+    .chat-member-copy strong,.chat-member-copy small { display:block; overflow-wrap:anywhere; }
+    .chat-member-copy small { margin-top:3px; color:var(--muted); }
+    .member-trash-button { width:36px; height:36px; display:grid; place-items:center; flex-shrink:0; padding:7px; color:#ff6572; border:1px solid #553039; background:#211216; }
+    .member-trash-button svg { width:18px; height:18px; }
+    .member-trash-button:hover { background:#351820; }
     .group-system-message { align-self:center; max-width:90%; padding:6px 12px; border-radius:12px; background:#1b1d22; color:#a4a7af; font-size:12px; line-height:1.45; text-align:center; margin:10px auto; }
     .group-header-edit { margin-left:auto; }
     .count-badge { display:inline-flex; min-width:18px; height:18px; padding:0 5px; align-items:center; justify-content:center; border-radius:10px; background:var(--blue); color:white; font-size:11px; font-weight:700; margin-left:7px; }
@@ -356,7 +371,7 @@
       --incoming: #1a1e27;
       --input: #0b0e14;
     }
-    body { background: radial-gradient(ellipse at 15% -15%, rgba(22,133,255,.09), transparent 38%), var(--bg); letter-spacing: -.12px; }
+    body { background: var(--bg); letter-spacing: -.12px; }
     button { font-weight: 500; }
     button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid rgba(22,133,255,.8); outline-offset: 2px; }
     input, textarea, select { background: var(--input); border: 1px solid var(--border); border-radius: 5px; transition: border-color .18s, background .18s; }
@@ -555,7 +570,9 @@
             </div>
             <button id="voiceCallButton" class="secondary" type="button" disabled title="Start a voice call">Voice</button>
             <button id="videoCallButton" class="secondary" type="button" disabled title="Start a video call">Video</button>
+            <button id="groupMembersButton" class="secondary hidden" type="button">Members</button>
             <button id="groupManageButton" class="secondary hidden" type="button">Group settings</button>
+            <button id="leaveGroupButton" class="danger hidden" type="button">Leave group</button>
           </header>
           <div id="messagesList" class="messages"><div class="chat-empty">Loading messages...</div></div>
           <div id="uploadTrack" class="upload-track hidden" aria-label="Upload progress"><div id="uploadFill" class="upload-fill"></div></div>
@@ -584,6 +601,15 @@
       <p id="groupFormStatus" class="status" aria-live="polite"></p>
       <div class="group-edit-row"><button type="button" id="cancelGroupButton" class="secondary">Cancel</button><button type="submit" id="saveGroupButton" class="primary">Create Group</button></div>
     </form>
+  </div>
+</div>
+
+<div id="groupMembersModal" class="group-modal hidden" role="dialog" aria-modal="true" aria-labelledby="groupMembersTitle">
+  <div class="group-dialog">
+    <div class="group-dialog-header"><h2 id="groupMembersTitle">People in this chat</h2><button id="closeGroupMembers" type="button" class="secondary">Close</button></div>
+    <p class="page-description">People who are not your friends are shown by their Celio number.</p>
+    <div id="groupMembersList" class="group-member-picker"></div>
+    <p id="groupMembersStatus" class="status" aria-live="polite"></p>
   </div>
 </div>
 
@@ -716,6 +742,7 @@
     let activeChatKind = "direct";
     let activeChatMembers = [];
     let activeGroupData = null;
+    let groupMembersModalBusy = false;
     let groupsUnsubscribe = null;
     let groupsCache = [];
     let groupModalMode = "create";
@@ -728,6 +755,8 @@
     let messagesUnsubscribe = null;
     let typingUnsubscribe = null;
     let incomingCallsUnsubscribe = null;
+    let groupCallsUnsubscribe = null;
+    const declinedGroupCalls = new Set();
     let typingTimer = null;
     let typingStopTimer = null;
     let friendsCache = [];
@@ -1023,8 +1052,11 @@
     }
 
     function setCallButtonsDisabled(disabled) {
-      $("voiceCallButton").disabled = disabled;
-      $("videoCallButton").disabled = disabled;
+      const hasCallTarget = Boolean(activeChatId) && (activeChatKind === "group"
+        ? (activeChatMembers || []).filter(uid => uid !== currentUser?.uid).length > 0
+        : Boolean(activeFriendId));
+      $("voiceCallButton").disabled = disabled || !hasCallTarget;
+      $("videoCallButton").disabled = disabled || !hasCallTarget;
     }
 
     function updateCallStatus(text) {
@@ -1098,8 +1130,11 @@
       const peerName = c.peerProfile?.username || "Friend";
       const myName = currentProfile?.username || "You";
 
-      $("callStage").className = "call-stage " + c.type;
-      $("callTitle").textContent = (c.type === "video" ? "Video call with " : "Voice call with ") + peerName;
+      $("callStage").className = "call-stage " + (c.isGroup ? "group " : "") + c.type;
+      $("callTitle").textContent = c.isGroup
+        ? (c.type === "video" ? "Group video call" : "Group voice call")
+        : (c.type === "video" ? "Video call with " : "Voice call with ") + peerName;
+      $("remoteTile").classList.toggle("hidden", Boolean(c.isGroup));
 
       renderAvatarInto($("localCallAvatar"), currentProfile);
       renderAvatarInto($("remoteCallAvatar"), c.peerProfile || { username: peerName });
@@ -1130,7 +1165,9 @@
       $("remoteVideo").srcObject = null;
       $("remoteAudio").srcObject = null;
       $("localTile").classList.remove("has-video", "speaking");
-      $("remoteTile").classList.remove("has-video", "speaking");
+      $("remoteTile").classList.remove("has-video", "speaking", "hidden");
+      document.querySelectorAll(".group-remote-tile").forEach(tile => tile.remove());
+      $("callStage").classList.remove("group");
       updateCallStatus("");
     }
 
@@ -1398,6 +1435,13 @@
       clearAudioUnlock();
       c.unsubs.forEach(unsubscribe => { try { unsubscribe(); } catch {} });
 
+      if (c.peers) {
+        for (const peer of c.peers.values()) {
+          peer.unsubs?.forEach(unsubscribe => { try { unsubscribe(); } catch {} });
+          try { peer.pc?.close(); } catch {}
+        }
+        c.peers.clear();
+      }
       try { if (c.channel) c.channel.close(); } catch {}
       if (c.localMonitor) c.localMonitor.stop();
       if (c.remoteMonitor) c.remoteMonitor.stop();
@@ -1419,6 +1463,11 @@
       const c = call;
       if (!c) return;
 
+      if (c.isGroup) {
+        await endGroupCall(c, message);
+        return;
+      }
+
       let pending = null;
       if (c.ref) {
         pending = c.ref.update({ status: "ended", endedAt: serverTimestamp() }).catch(() => {});
@@ -1429,6 +1478,7 @@
     }
 
     async function startCall(type) {
+      if (activeChatKind === "group") return startGroupCall(type);
       if (call || incomingCall) {
         showToast("You're already in a call.");
         return;
@@ -1550,6 +1600,228 @@
       }
     }
 
+    function groupPairId(uidA, uidB) {
+      return [uidA, uidB].sort().join("__");
+    }
+
+    function makeGroupRemoteTile(uid, username, type) {
+      const tile = document.createElement("div");
+      tile.className = "group-remote-tile call-tile";
+      tile.dataset.uid = uid;
+      const ring = document.createElement("div");
+      ring.className = "call-ring";
+      const avatar = document.createElement("div");
+      avatar.className = "avatar call-avatar group-remote-avatar";
+      avatar.textContent = (username || "?").slice(0, 1).toUpperCase();
+      ring.appendChild(avatar);
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+      const audio = document.createElement("audio");
+      audio.autoplay = true;
+      audio.playsInline = true;
+      audio.style.display = "none";
+      const name = document.createElement("div");
+      name.className = "call-name";
+      name.textContent = username || "Group member";
+      tile.append(ring, video, audio, name);
+      if (type === "video") tile.classList.add("has-video");
+      $("callStage").appendChild(tile);
+      return { tile, video, audio, ring, avatar, name };
+    }
+
+    async function startGroupCall(type) {
+      if (call || incomingCall) {
+        showToast("You're already in a call.");
+        return;
+      }
+      if (!currentUser || activeChatKind !== "group" || !activeGroupData || !activeChatId) return;
+      if (!callSupported()) {
+        showToast("This browser doesn't support voice or video calls.");
+        return;
+      }
+      const memberIds = [...new Set((activeGroupData.participants || activeChatMembers || []).filter(uid => uid))];
+      if (memberIds.length < 2 || !memberIds.includes(currentUser.uid)) {
+        showToast("This group needs at least two members to start a call.");
+        return;
+      }
+      const c = {
+        isGroup: true, role: "caller", type, chatId: activeChatId,
+        groupId: activeChatId, memberIds, peers: new Map(), unsubs: [],
+        micOn: true, cameraOn: type === "video", connected: false, joined: true
+      };
+      call = c;
+      setCallButtonsDisabled(true);
+      try {
+        c.localStream = await getCallMedia(type);
+        if (call !== c) { c.localStream.getTracks().forEach(track => track.stop()); return; }
+        const roomRef = db.collection("groupCalls").doc();
+        c.id = roomRef.id;
+        c.ref = roomRef;
+        const callerName = currentProfile?.username || "Someone";
+        await roomRef.set({
+          isGroupCall: true, groupId: activeChatId, groupName: activeGroupData.name || $("chatFriendName").textContent || "Group",
+          callerId: currentUser.uid, callerName, participantIds: memberIds, joinedIds: [currentUser.uid],
+          type, status: "ringing", createdAt: serverTimestamp()
+        });
+        await roomRef.collection("participants").doc(currentUser.uid).set({
+          uid: currentUser.uid, username: callerName, active: true, joinedAt: serverTimestamp()
+        });
+        openCallUi(c, "Waiting for group members...");
+        $("callTitle").textContent = `${type === "video" ? "Group video" : "Group voice"} call · ${c.groupName || activeGroupData.name || "Group"}`;
+        $("remoteTile").classList.add("hidden");
+        await watchGroupRoom(c);
+        c.ringTimer = setTimeout(async () => {
+          if (call === c && !c.connected) {
+            const snap = await roomRef.get().catch(() => null);
+            if (snap?.exists && (snap.data().joinedIds || []).length <= 1) await endCall("No one joined the call.");
+          }
+        }, RING_TIMEOUT_MS);
+      } catch (error) {
+        console.error("[Celio group call] Start failed:", error);
+        if (call === c) await endCall("");
+        showToast(mediaErrorMessage(error));
+      }
+    }
+
+    async function joinGroupCall(roomId, roomRef, roomData) {
+      if (call || !currentUser) return;
+      if (!callSupported()) { showToast("This browser doesn't support voice or video calls."); return; }
+      if (roomData.status === "ended") { showToast("This group call has ended."); return; }
+      const c = {
+        isGroup: true, role: "callee", type: roomData.type === "video" ? "video" : "voice",
+        chatId: roomData.groupId, groupId: roomData.groupId, groupName: roomData.groupName || "Group",
+        memberIds: roomData.participantIds || [], peers: new Map(), unsubs: [], micOn: true,
+        cameraOn: roomData.type === "video", connected: false, joined: true, id: roomId, ref: roomRef
+      };
+      call = c;
+      setCallButtonsDisabled(true);
+      try {
+        c.localStream = await getCallMedia(c.type);
+        if (call !== c) { c.localStream.getTracks().forEach(track => track.stop()); return; }
+        const profileName = currentProfile?.username || "Someone";
+        await roomRef.collection("participants").doc(currentUser.uid).set({
+          uid: currentUser.uid, username: profileName, active: true, joinedAt: serverTimestamp()
+        }, { merge: true });
+        await roomRef.update({ joinedIds: arrayUnion(currentUser.uid), status: "active" });
+        openCallUi(c, "Connecting to group...");
+        $("callTitle").textContent = `${c.type === "video" ? "Group video" : "Group voice"} call · ${c.groupName}`;
+        $("remoteTile").classList.add("hidden");
+        await watchGroupRoom(c);
+      } catch (error) {
+        console.error("[Celio group call] Join failed:", error);
+        if (call === c) await endCall("");
+        showToast(mediaErrorMessage(error));
+      }
+    }
+
+    async function watchGroupRoom(c) {
+      const roomRef = c.ref;
+      c.unsubs.push(roomRef.onSnapshot(snapshot => {
+        if (call !== c || !snapshot.exists) return;
+        const data = snapshot.data();
+        if (data.status === "ended") { finishCall("Group call ended."); return; }
+        c.memberIds = data.participantIds || c.memberIds;
+        if (data.joinedIds && data.joinedIds.length > 1) {
+          clearTimeout(c.ringTimer);
+          updateCallStatus(c.connected ? "Connected" : `${data.joinedIds.length} joined · Connecting...`);
+        }
+      }, error => console.error("[Celio group call] Room listener error:", error)));
+      c.unsubs.push(roomRef.collection("participants").onSnapshot(snapshot => {
+        if (call !== c) return;
+        snapshot.docChanges().forEach(change => {
+          const participant = change.doc.data();
+          const uid = change.doc.id;
+          if (uid === currentUser.uid) return;
+          if (change.type === "removed" || participant.active === false) {
+            const peer = c.peers.get(uid);
+            if (peer) { peer.unsubs.forEach(unsub => { try { unsub(); } catch {} }); try { peer.pc.close(); } catch {} peer.tile?.tile.remove(); c.peers.delete(uid); }
+            return;
+          }
+          if (participant.active && !c.peers.has(uid)) void connectGroupPeer(c, uid, participant.username || "Group member");
+        });
+      }, error => console.error("[Celio group call] Participants listener error:", error)));
+    }
+
+    async function connectGroupPeer(c, uid, username) {
+      if (call !== c || c.peers.has(uid)) return;
+      const pairId = groupPairId(currentUser.uid, uid);
+      const pairRef = c.ref.collection("connections").doc(pairId);
+      const isOfferer = currentUser.uid.localeCompare(uid) < 0;
+      const peer = { uid, username, pc: new RTCPeerConnection(RTC_CONFIG), queued: [], unsubs: [], tile: makeGroupRemoteTile(uid, username, c.type), offerStarted: false, answerStarted: false };
+      c.peers.set(uid, peer);
+      c.localStream.getTracks().forEach(track => peer.pc.addTrack(track, c.localStream));
+      peer.pc.onicecandidate = event => {
+        if (event.candidate) pairRef.collection("candidates_" + currentUser.uid).add(event.candidate.toJSON()).catch(error => console.error("[Celio group call] ICE write failed:", error));
+      };
+      peer.pc.ontrack = event => {
+        const stream = event.streams?.[0];
+        if (stream) { peer.tile.video.srcObject = stream; peer.tile.audio.srcObject = stream; }
+        else {
+          const streamFallback = peer.remoteStream || (peer.remoteStream = new MediaStream());
+          if (!streamFallback.getTracks().includes(event.track)) streamFallback.addTrack(event.track);
+          peer.tile.video.srcObject = streamFallback; peer.tile.audio.srcObject = streamFallback;
+        }
+        if (event.track.kind === "video") peer.tile.tile.classList.add("has-video");
+        if (event.track.kind === "audio") peer.tile.audio.play().catch(() => showToast("Tap the call screen if a member's audio is blocked."));
+        peer.tile.video.play().catch(() => {});
+        startCallTimer(c);
+      };
+      peer.pc.onconnectionstatechange = () => {
+        if (peer.pc.connectionState === "connected") startCallTimer(c);
+        if (peer.pc.connectionState === "failed") updateCallStatus("A member connection failed. Other members may still be connected.");
+      };
+      peer.unsubs.push(pairRef.onSnapshot(async snapshot => {
+        if (call !== c) return;
+        const data = snapshot.exists ? snapshot.data() : {};
+        try {
+          if (isOfferer && !peer.offerStarted) {
+            peer.offerStarted = true;
+            const offer = await peer.pc.createOffer();
+            await peer.pc.setLocalDescription(offer);
+            await pairRef.set({ offerBy: currentUser.uid, offer: { type: offer.type, sdp: offer.sdp }, updatedAt: serverTimestamp() }, { merge: true });
+          }
+          if (!isOfferer && data.offer && !peer.answerStarted) {
+            peer.answerStarted = true;
+            await peer.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await peer.pc.createAnswer();
+            await peer.pc.setLocalDescription(answer);
+            await pairRef.set({ answerBy: currentUser.uid, answer: { type: answer.type, sdp: answer.sdp }, updatedAt: serverTimestamp() }, { merge: true });
+            await flushGroupPeerCandidates(peer);
+          } else if (isOfferer && data.answer && !peer.pc.currentRemoteDescription) {
+            await peer.pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+            await flushGroupPeerCandidates(peer);
+          }
+        } catch (error) { console.error("[Celio group call] Offer/answer failed:", error); }
+      }, error => console.error("[Celio group call] Pair listener error:", error)));
+      peer.unsubs.push(pairRef.collection("candidates_" + uid).onSnapshot(snapshot => {
+        snapshot.docChanges().forEach(change => {
+          if (change.type !== "added") return;
+          const candidate = change.doc.data();
+          if (!peer.pc.remoteDescription) peer.queued.push(candidate);
+          else peer.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(error => console.error("[Celio group call] ICE read failed:", error));
+        });
+      }, error => console.error("[Celio group call] Remote ICE listener error:", error)));
+    }
+
+    async function flushGroupPeerCandidates(peer) {
+      const queued = peer.queued.splice(0);
+      for (const candidate of queued) {
+        try { await peer.pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+        catch (error) { console.error("[Celio group call] Queued ICE failed:", error); }
+      }
+    }
+
+    async function endGroupCall(c, message = "Group call ended.") {
+      if (!c || c.finished) return;
+      try {
+        if (c.role === "caller") await c.ref.update({ status: "ended", endedAt: serverTimestamp() });
+        else await c.ref.collection("participants").doc(currentUser.uid).set({ active: false, leftAt: serverTimestamp() }, { merge: true });
+      } catch (error) { console.error("[Celio group call] Could not update room state:", error); }
+      finishCall(message);
+    }
+
     function hideIncomingCall() {
       incomingCall = null;
       $("incomingCall").classList.add("hidden");
@@ -1559,26 +1831,30 @@
       incomingCall = { id, ref, data };
 
       $("incomingCallTitle").textContent = data.callerName || "Someone";
-      $("incomingCallText").textContent = data.type === "video" ? "Incoming video call" : "Incoming voice call";
+      $("incomingCallText").textContent = data.isGroupCall
+        ? (data.type === "video" ? "Incoming group video call" : "Incoming group voice call")
+        : (data.type === "video" ? "Incoming video call" : "Incoming voice call");
       renderAvatarInto($("incomingCallAvatar"), { username: data.callerName });
       $("incomingCall").classList.remove("hidden");
 
-      /* Prefer the caller's real profile over the name written in the call. */
-      try {
-        const profile = await getProfile(data.callerId);
-        if (profile && incomingCall && incomingCall.id === id) {
-          $("incomingCallTitle").textContent = profile.username || "Someone";
-          renderAvatarInto($("incomingCallAvatar"), profile);
+      if (!data.isGroupCall && data.callerId) {
+        try {
+          const profile = await getProfile(data.callerId);
+          if (profile && incomingCall && incomingCall.id === id) {
+            $("incomingCallTitle").textContent = profile.username || "Someone";
+            renderAvatarInto($("incomingCallAvatar"), profile);
+          }
+        } catch (error) {
+          console.error(error);
         }
-      } catch (error) {
-        console.error(error);
       }
     }
 
     function startIncomingCallsListener() {
       if (incomingCallsUnsubscribe) incomingCallsUnsubscribe();
+      if (groupCallsUnsubscribe) groupCallsUnsubscribe();
 
-      incomingCallsUnsubscribe = db.collection("calls")
+      const directUnsubscribe = db.collection("calls")
         .where("calleeId", "==", currentUser.uid)
         .where("status", "==", "ringing")
         .onSnapshot(snapshot => {
@@ -1608,11 +1884,36 @@
             showIncomingCall(doc.id, doc.ref, data);
           });
         }, error => console.error("[Celio call] Incoming call listener error:", error));
+
+      groupCallsUnsubscribe = db.collection("groupCalls")
+        .where("participantIds", "array-contains", currentUser.uid)
+        .onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
+            if (change.type !== "added" && change.type !== "modified") return;
+            const data = change.doc.data();
+            if (!data || !["ringing", "active"].includes(data.status)) return;
+            if ((data.joinedIds || []).includes(currentUser.uid)) return;
+            if (declinedGroupCalls.has(change.doc.id)) return;
+            const created = data.createdAt && typeof data.createdAt.toMillis === "function" ? data.createdAt.toMillis() : 0;
+            if (data.status === "ringing" && created && Date.now() - created > STALE_CALL_MS) return;
+            if (call || (incomingCall && incomingCall.id !== change.doc.id)) return;
+            if (incomingCall && incomingCall.id === change.doc.id) return;
+            showIncomingCall(change.doc.id, change.doc.ref, { ...data, isGroupCall: true });
+          });
+        }, error => console.error("[Celio call] Group-call listener error:", error));
+
+      incomingCallsUnsubscribe = () => { directUnsubscribe(); };
     }
 
     async function acceptIncomingCall() {
       const incoming = incomingCall;
       if (!incoming || call) return;
+
+      if (incoming.data.isGroupCall) {
+        hideIncomingCall();
+        await joinGroupCall(incoming.id, incoming.ref, incoming.data);
+        return;
+      }
 
       hideIncomingCall();
 
@@ -1699,7 +2000,12 @@
       if (!incoming) return;
 
       hideIncomingCall();
-      incoming.ref.update({ status: "declined", endedAt: serverTimestamp() }).catch(() => {});
+      if (incoming.data.isGroupCall) {
+        declinedGroupCalls.add(incoming.id);
+        incoming.ref.update({ declinedIds: arrayUnion(currentUser.uid) }).catch(() => {});
+      } else {
+        incoming.ref.update({ status: "declined", endedAt: serverTimestamp() }).catch(() => {});
+      }
     }
 
     function toggleMute() {
@@ -1910,7 +2216,7 @@
     }
 
     function stopListeners() {
-      [friendsUnsubscribe, requestsUnsubscribe, groupsUnsubscribe, messagesUnsubscribe, typingUnsubscribe, incomingCallsUnsubscribe].forEach(unsubscribe => {
+      [friendsUnsubscribe, requestsUnsubscribe, groupsUnsubscribe, messagesUnsubscribe, typingUnsubscribe, incomingCallsUnsubscribe, groupCallsUnsubscribe].forEach(unsubscribe => {
         if (unsubscribe) unsubscribe();
       });
 
@@ -1920,6 +2226,7 @@
       messagesUnsubscribe = null;
       typingUnsubscribe = null;
       incomingCallsUnsubscribe = null;
+      groupCallsUnsubscribe = null;
 
       hideIncomingCall();
       if (call) endCall("");
@@ -1942,10 +2249,10 @@
       activeChatKind = "direct";
       activeChatMembers = [];
       activeGroupData = null;
-      $("groupManageButton").classList.add("hidden");
+      $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden"); $("leaveGroupButton").classList.add("hidden");
       friendIsTyping = false;
       setCallButtonsDisabled(true);
-      $("groupManageButton").classList.add("hidden");
+      $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden");
       $("messagesList").replaceChildren();
     }
 
@@ -2889,7 +3196,7 @@
       $("chatFriendName").textContent = friendName || "Conversation";
       renderAvatarInto($("chatAvatar"), await getProfile(friendId) || { username: friendName });
       $("chatSubtitle").textContent = "Direct message";
-      $("groupManageButton").classList.add("hidden");
+      $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden");
       $("messagesList").replaceChildren();
 
       const loading = document.createElement("div");
@@ -2937,7 +3244,7 @@
         activeChatKind = "direct";
         activeChatMembers = [currentUser.uid, friendId];
         activeGroupData = null;
-        $("groupManageButton").classList.add("hidden");
+        $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden");
         $("messageInput").disabled = false;
         $("sendButton").disabled = false;
         $("attachButton").disabled = false;
@@ -3177,6 +3484,18 @@
       });
     }
 
+    function isSavedFriend(uid) {
+      return uid === currentUser?.uid || friendsCache.some(friend => friend.uid === uid);
+    }
+
+    function groupDisplayName(profile, uid) {
+      if (!profile) return uid === currentUser?.uid ? (currentProfile?.username || "You") : "Celio user";
+      if (uid !== currentUser?.uid && !isSavedFriend(uid)) {
+        return formatCelioNumber(profile.celioNumber) || "Unknown Celio number";
+      }
+      return profile.username || formatCelioNumber(profile.celioNumber) || "Celio user";
+    }
+
     async function renderGroupMemberPicker(selectedIds = []) {
       const holder = $("groupMemberPicker"); holder.replaceChildren();
       const unique = new Map();
@@ -3205,8 +3524,8 @@
     function makeGroupMemberOption(profile, checked) {
       const label = document.createElement("label"); label.className = "group-member-option";
       const input = document.createElement("input"); input.type = "checkbox"; input.value = profile.uid; input.checked = checked;
-      const copy = document.createElement("span"); copy.textContent = profile.username || formatCelioNumber(profile.celioNumber) || "Celio user";
-      const number = document.createElement("small"); number.textContent = formatCelioNumber(profile.celioNumber);
+      const copy = document.createElement("span"); copy.textContent = groupDisplayName(profile, profile.uid);
+      const number = document.createElement("small"); number.textContent = profile.uid === currentUser.uid ? "You" : (isSavedFriend(profile.uid) ? (formatCelioNumber(profile.celioNumber) || "Celio user") : "Not in your friends");
       copy.appendChild(number); label.append(input, copy); return label;
     }
 
@@ -3260,11 +3579,11 @@
           await ref.update({ name, icon:selectedGroupIcon, participants:memberIds, updatedAt:serverTimestamp(), lastMessage:"Group updated" });
           for (const uid of added) {
             const profile = await getProfile(uid);
-            await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} added ${profile?.username || formatCelioNumber(profile?.celioNumber) || "a member"} to the group.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
+            await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} added ${(profile ? groupDisplayName(profile, uid) : "a member")} to the group.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
           }
           for (const uid of removed) {
             const profile = await getProfile(uid);
-            await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} removed ${profile?.username || formatCelioNumber(profile?.celioNumber) || "a member"} from the group.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
+            await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} removed ${(profile ? groupDisplayName(profile, uid) : "a member")} from the group.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
           }
           if (!added.length && !removed.length) await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} updated the group details.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
           closeGroupModal();
@@ -3276,12 +3595,156 @@
       } finally { button.disabled = false; }
     }
 
+    async function showGroupMembers() {
+      if (activeChatKind !== "group" || !activeGroupData) return;
+      const modal = $("groupMembersModal");
+      const list = $("groupMembersList");
+      list.replaceChildren();
+      $("groupMembersStatus").textContent = "Loading members...";
+      modal.classList.remove("hidden");
+      const group = activeGroupData;
+      const members = [...new Set(group.participants || [])];
+      const canManage = group.createdBy === currentUser.uid;
+      try {
+        const profiles = await Promise.all(members.map(uid => getProfileCached(uid).catch(() => null)));
+        if (activeGroupData?.id !== group.id) return;
+        list.replaceChildren();
+        members.forEach((uid, index) => {
+          const profile = profiles[index];
+          const row = document.createElement("div"); row.className = "chat-member-row";
+          const avatar = document.createElement("div"); avatar.className = "chat-member-avatar";
+          if (profile?.avatarUrl) {
+            const img = document.createElement("img"); img.src = profile.avatarUrl; img.alt = ""; avatar.appendChild(img);
+          } else avatar.textContent = (groupDisplayName(profile, uid).trim()[0] || "?").toUpperCase();
+          const copy = document.createElement("div"); copy.className = "chat-member-copy";
+          const name = document.createElement("strong"); name.textContent = uid === currentUser.uid ? `${groupDisplayName(profile, uid)} (you)` : groupDisplayName(profile, uid);
+          const detail = document.createElement("small"); detail.textContent = uid === currentUser.uid ? "Your account" : (profile?.celioNumber ? formatCelioNumber(profile.celioNumber) : "Celio number unavailable");
+          copy.append(name, detail); row.append(avatar, copy);
+          if (canManage && uid !== currentUser.uid) {
+            const trash = document.createElement("button"); trash.type = "button"; trash.className = "member-trash-button";
+            trash.title = "Remove from group"; trash.setAttribute("aria-label", `Remove ${name.textContent} from group`);
+            trash.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg>';
+            trash.addEventListener("click", () => removeGroupMember(uid, group.id, groupDisplayName(profile, uid), trash));
+            row.appendChild(trash);
+          }
+          list.appendChild(row);
+        });
+        $("groupMembersStatus").textContent = canManage ? "Use the trash button to remove someone from this group." : "Only the group creator can remove members.";
+      } catch (error) {
+        console.error("Could not load group members:", error);
+        $("groupMembersStatus").textContent = friendlyError(error);
+      }
+    }
+
+    function confirmLeaveGroup(groupName) {
+      return new Promise(resolve => {
+        const modal = $("removeFriendModal");
+        const title = $("removeFriendTitle");
+        const message = $("removeFriendMessage");
+        const cancel = $("cancelRemoveFriend");
+        const confirm = $("confirmRemoveFriend");
+        const oldTitle = title.textContent;
+        const oldConfirmText = confirm.textContent;
+        title.textContent = "Leave group?";
+        message.textContent = `Are you sure you want to leave ${groupName}? You will no longer see its messages unless you are added again.`;
+        confirm.textContent = "Leave group";
+        modal.classList.remove("hidden");
+        confirm.focus();
+        const finish = result => {
+          modal.classList.add("hidden");
+          title.textContent = oldTitle;
+          confirm.textContent = oldConfirmText;
+          cancel.removeEventListener("click", onCancel);
+          confirm.removeEventListener("click", onConfirm);
+          modal.removeEventListener("click", onBackdrop);
+          document.removeEventListener("keydown", onKeydown);
+          resolve(result);
+        };
+        const onCancel = () => finish(false);
+        const onConfirm = () => finish(true);
+        const onBackdrop = event => { if (event.target === modal) finish(false); };
+        const onKeydown = event => { if (event.key === "Escape") finish(false); };
+        cancel.addEventListener("click", onCancel);
+        confirm.addEventListener("click", onConfirm);
+        modal.addEventListener("click", onBackdrop);
+        document.addEventListener("keydown", onKeydown);
+      });
+    }
+
+    async function leaveCurrentGroup() {
+      if (activeChatKind !== "group" || !activeGroupData || !currentUser) return;
+      const group = activeGroupData;
+      const groupName = group.name || "this group";
+      if (!(group.participants || []).includes(currentUser.uid)) return;
+      if (!await confirmLeaveGroup(groupName)) return;
+
+      const button = $("leaveGroupButton");
+      button.disabled = true;
+      setStatus("chatStatus", "Leaving group...");
+      try {
+        const ref = db.collection("chats").doc(group.id);
+        const snapshot = await ref.get();
+        if (!snapshot.exists) throw new Error("This group is no longer available.");
+        const latest = snapshot.data();
+        const participants = (latest.participants || []).filter(uid => uid !== currentUser.uid);
+        if (participants.length === (latest.participants || []).length) throw new Error("You are no longer a member of this group.");
+
+        await ref.collection("messages").add({
+          messageType: "system",
+          text: `${currentProfile?.username || "Someone"} left the group.`,
+          senderId: currentUser.uid,
+          senderUsername: currentProfile?.username || "Celio user",
+          createdAt: serverTimestamp(), deliveredTo: [], readBy: []
+        });
+        const updates = { participants, updatedAt: serverTimestamp(), lastMessage: `${currentProfile?.username || "Someone"} left the group.` };
+        if (latest.createdBy === currentUser.uid && participants.length) updates.createdBy = participants[0];
+        await ref.update(updates);
+        closeActiveChat();
+        showPage("home");
+        showToast(`You left ${groupName}.`);
+      } catch (error) {
+        console.error("Could not leave group:", error?.code, error?.message || error);
+        setStatus("chatStatus", friendlyError(error), "error");
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function removeGroupMember(uid, groupId, displayName, button) {
+      if (groupMembersModalBusy || !activeGroupData || activeGroupData.id !== groupId) return;
+      if (activeGroupData.createdBy !== currentUser.uid) {
+        $("groupMembersStatus").textContent = "Only the group creator can remove members."; return;
+      }
+      const remaining = (activeGroupData.participants || []).filter(memberId => memberId !== uid);
+      if (remaining.length < 2) { $("groupMembersStatus").textContent = "A group must have at least two members."; return; }
+      groupMembersModalBusy = true; button.disabled = true;
+      try {
+        const ref = db.collection("chats").doc(groupId);
+        await ref.update({ participants: remaining, updatedAt: serverTimestamp(), lastMessage: "Group updated" });
+        await ref.collection("messages").add({
+          messageType: "system",
+          text: `${currentProfile?.username || "Someone"} removed ${displayName} from the group.`,
+          senderId: currentUser.uid,
+          senderUsername: currentProfile?.username || "Celio user",
+          createdAt: serverTimestamp(), deliveredTo: [], readBy: []
+        });
+        activeGroupData = { ...activeGroupData, participants: remaining };
+        activeChatMembers = remaining;
+        $("chatSubtitle").textContent = `${remaining.length} members`;
+        await showGroupMembers();
+      } catch (error) {
+        console.error("Could not remove group member:", error);
+        $("groupMembersStatus").textContent = friendlyError(error);
+        button.disabled = false;
+      } finally { groupMembersModalBusy = false; }
+    }
+
     async function openGroupChat(groupId) {
       closeActiveChat(); showChatPanel();
       $("messagesList").replaceChildren();
       const loading = document.createElement("div"); loading.className = "chat-empty"; loading.textContent = "Opening group..."; $("messagesList").appendChild(loading);
       $("messageInput").value = ""; $("messageInput").disabled = true; $("sendButton").disabled = true; $("attachButton").disabled = true;
-      setCallButtonsDisabled(true); $("groupManageButton").classList.remove("hidden"); setStatus("chatStatus", "");
+      setCallButtonsDisabled(true); $("groupManageButton").classList.remove("hidden"); $("groupMembersButton").classList.remove("hidden"); $("leaveGroupButton").classList.remove("hidden"); setStatus("chatStatus", "");
       try {
         const chatRef = db.collection("chats").doc(groupId); const snapshot = await chatRef.get();
         if (!snapshot.exists) throw new Error("This group is unavailable.");
@@ -3929,6 +4392,10 @@
     });
 
     $("createGroupButton").addEventListener("click", () => showGroupModal("create"));
+    $("groupMembersButton").addEventListener("click", showGroupMembers);
+    $("leaveGroupButton").addEventListener("click", leaveCurrentGroup);
+    $("closeGroupMembers").addEventListener("click", () => $("groupMembersModal").classList.add("hidden"));
+    $("groupMembersModal").addEventListener("click", event => { if (event.target === $("groupMembersModal")) $("groupMembersModal").classList.add("hidden"); });
     $("closeGroupModal").addEventListener("click", closeGroupModal);
     $("cancelGroupButton").addEventListener("click", closeGroupModal);
     $("groupModal").addEventListener("click", event => { if (event.target === $("groupModal")) closeGroupModal(); });
