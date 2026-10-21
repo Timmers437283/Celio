@@ -525,8 +525,8 @@
           "turn:us.relay.metered.ca:443",
           "turns:us.relay.metered.ca:443?transport=tcp"
         ],
-        username: "e71eba98d6a4196118021445",
-        credential: "tlG7SC1LPLYpZMj4"
+        username: "YOUR_NEW_METERED_USERNAME",
+        credential: "YOUR_NEW_METERED_CREDENTIAL"
       }
     ];
 
@@ -536,13 +536,7 @@
     const RTC_CONFIG = {
       iceServers: [
         { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-        ...TURN_SERVERS.filter(server => {
-          const username = String(server.username || "");
-          const credential = String(server.credential || "");
-          return Boolean(username && credential &&
-            !username.startsWith("YOUR_") &&
-            !credential.startsWith("YOUR_"));
-        })
+        ...TURN_SERVERS
       ],
       iceCandidatePoolSize: 4,
       iceTransportPolicy: FORCE_RELAY ? "relay" : "all"
@@ -839,25 +833,6 @@
 
     /* ---------- Voice and video calls ---------- */
 
-    /* Keep ICE candidate documents limited to fields expected by Firestore rules. */
-    function serializeIceCandidate(candidate) {
-      return {
-        candidate: candidate.candidate,
-        sdpMid: candidate.sdpMid ?? null,
-        sdpMLineIndex: candidate.sdpMLineIndex ?? null
-      };
-    }
-
-    function hasConfiguredTurnServers() {
-      return TURN_SERVERS.some(server => {
-        const username = String(server.username || "");
-        const credential = String(server.credential || "");
-        return Boolean(username && credential &&
-          !username.startsWith("YOUR_") &&
-          !credential.startsWith("YOUR_"));
-      });
-    }
-
     function callLog(...args) { console.log("[Celio call]", ...args); }
     function callWarn(...args) { console.warn("[Celio call]", ...args); }
 
@@ -1058,7 +1033,7 @@
           "Gave up: no media connection after", CONNECT_TIMEOUT_MS / 1000, "seconds.",
           "ICE state:", c.pc && c.pc.iceConnectionState,
           "| relay candidates found:", c.relayCount,
-          "| TURN configured:", hasConfiguredTurnServers()
+          "| TURN configured:", TURN_SERVERS.length > 0
         );
         endCall("Couldn't connect the call. The network may be blocking it.");
       }, CONNECT_TIMEOUT_MS);
@@ -1204,12 +1179,50 @@
       }
     }
 
+    function formatCallClock(timestamp) {
+      return new Date(timestamp).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+      });
+    }
+
+    async function saveCompletedCallMessage(c, endedAt) {
+      if (!c || c.role !== "caller" || !c.connectedAt || c.callLogSaved || !c.chatId) return;
+      c.callLogSaved = true;
+
+      const durationSeconds = Math.max(0, Math.floor((endedAt - c.connectedAt) / 1000));
+      const minutes = Math.floor(durationSeconds / 60);
+      const seconds = String(durationSeconds % 60).padStart(2, "0");
+      const callKind = c.type === "video" ? "Video call" : "Voice call";
+      const startTime = formatCallClock(c.connectedAt);
+      const endTime = formatCallClock(endedAt);
+      const text = `${callKind} lasted ${minutes}:${seconds} from ${startTime} to ${endTime}.`;
+      const chatRef = db.collection("chats").doc(c.chatId);
+
+      try {
+        await chatRef.collection("messages").add({
+          senderId: currentUser.uid,
+          senderUsername: currentProfile?.username || "You",
+          text,
+          createdAt: serverTimestamp(),
+          deliveredTo: [],
+          readBy: []
+        });
+        await chatRef.update({ lastMessage: text, updatedAt: serverTimestamp() });
+      } catch (error) {
+        console.error("[Celio call] Could not save call history message:", error?.code, error?.message || error);
+      }
+    }
+
     /* Local cleanup. Safe to call more than once. */
     function finishCall(message) {
       const c = call;
       if (!c || c.finished) return;
 
       c.finished = true;
+      if (c.connectedAt) void saveCompletedCallMessage(c, Date.now());
       call = null;
 
       clearTimeout(c.ringTimer);
@@ -1267,6 +1280,7 @@
       const c = {
         role: "caller",
         type,
+        chatId,
         peerId: friendId,
         unsubs: [],
         queued: [],
@@ -1295,7 +1309,7 @@
 
         openCallUi(c, "Calling...");
         createPeer(c);
-        callLog("Starting", type, "call. TURN configured:", hasConfiguredTurnServers());
+        callLog("Starting", type, "call. TURN configured:", TURN_SERVERS.length > 0);
 
         const callRef = db.collection("calls").doc();
         c.id = callRef.id;
@@ -1310,7 +1324,7 @@
 
         c.pc.onicecandidate = event => {
           if (!event.candidate) return;
-          const data = serializeIceCandidate(event.candidate);
+          const data = event.candidate.toJSON();
           if (ready) sendCandidate(data); else pending.push(data);
         };
 
@@ -1474,11 +1488,11 @@
 
         openCallUi(c, "Connecting...");
         createPeer(c);
-        callLog("Answering", type, "call. TURN configured:", hasConfiguredTurnServers());
+        callLog("Answering", type, "call. TURN configured:", TURN_SERVERS.length > 0);
 
         c.pc.onicecandidate = event => {
           if (!event.candidate) return;
-          incoming.ref.collection("calleeCandidates").add(serializeIceCandidate(event.candidate))
+          incoming.ref.collection("calleeCandidates").add(event.candidate.toJSON())
             .catch(error => reportSignalingError(c, error));
         };
 
