@@ -536,7 +536,13 @@
     const RTC_CONFIG = {
       iceServers: [
         { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-        ...TURN_SERVERS
+        ...TURN_SERVERS.filter(server => {
+          const username = String(server.username || "");
+          const credential = String(server.credential || "");
+          return Boolean(username && credential &&
+            !username.startsWith("YOUR_") &&
+            !credential.startsWith("YOUR_"));
+        })
       ],
       iceCandidatePoolSize: 4,
       iceTransportPolicy: FORCE_RELAY ? "relay" : "all"
@@ -833,6 +839,25 @@
 
     /* ---------- Voice and video calls ---------- */
 
+    /* Keep ICE candidate documents limited to fields expected by Firestore rules. */
+    function serializeIceCandidate(candidate) {
+      return {
+        candidate: candidate.candidate,
+        sdpMid: candidate.sdpMid ?? null,
+        sdpMLineIndex: candidate.sdpMLineIndex ?? null
+      };
+    }
+
+    function hasConfiguredTurnServers() {
+      return TURN_SERVERS.some(server => {
+        const username = String(server.username || "");
+        const credential = String(server.credential || "");
+        return Boolean(username && credential &&
+          !username.startsWith("YOUR_") &&
+          !credential.startsWith("YOUR_"));
+      });
+    }
+
     function callLog(...args) { console.log("[Celio call]", ...args); }
     function callWarn(...args) { console.warn("[Celio call]", ...args); }
 
@@ -1033,7 +1058,7 @@
           "Gave up: no media connection after", CONNECT_TIMEOUT_MS / 1000, "seconds.",
           "ICE state:", c.pc && c.pc.iceConnectionState,
           "| relay candidates found:", c.relayCount,
-          "| TURN configured:", TURN_SERVERS.length > 0
+          "| TURN configured:", hasConfiguredTurnServers()
         );
         endCall("Couldn't connect the call. The network may be blocking it.");
       }, CONNECT_TIMEOUT_MS);
@@ -1270,7 +1295,7 @@
 
         openCallUi(c, "Calling...");
         createPeer(c);
-        callLog("Starting", type, "call. TURN configured:", TURN_SERVERS.length > 0);
+        callLog("Starting", type, "call. TURN configured:", hasConfiguredTurnServers());
 
         const callRef = db.collection("calls").doc();
         c.id = callRef.id;
@@ -1285,7 +1310,7 @@
 
         c.pc.onicecandidate = event => {
           if (!event.candidate) return;
-          const data = event.candidate.toJSON();
+          const data = serializeIceCandidate(event.candidate);
           if (ready) sendCandidate(data); else pending.push(data);
         };
 
@@ -1449,11 +1474,11 @@
 
         openCallUi(c, "Connecting...");
         createPeer(c);
-        callLog("Answering", type, "call. TURN configured:", TURN_SERVERS.length > 0);
+        callLog("Answering", type, "call. TURN configured:", hasConfiguredTurnServers());
 
         c.pc.onicecandidate = event => {
           if (!event.candidate) return;
-          incoming.ref.collection("calleeCandidates").add(event.candidate.toJSON())
+          incoming.ref.collection("calleeCandidates").add(serializeIceCandidate(event.candidate))
             .catch(error => reportSignalingError(c, error));
         };
 
