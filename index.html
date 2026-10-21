@@ -78,11 +78,14 @@
     .search-row { display: flex; gap: 10px; margin-bottom: 26px; }
     .search-row input { min-width: 0; }
     .list { display: flex; flex-direction: column; gap: 8px; }
-    .list-item { min-width: 0; padding: 14px; display: flex; align-items: center; gap: 13px; border: 1px solid var(--border); border-radius: 10px; }
+    .list-item { min-width: 0; padding: 14px; display: flex; align-items: center; gap: 13px; border: 1px solid var(--border); border-radius: 5px; }
+    .remove-friend-button { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 5px; }
+    .remove-friend-button:hover { color: var(--danger); background: #251515; border-color: #593030; }
+    .remove-friend-button svg { width: 18px; height: 18px; }
     .avatar { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; overflow: hidden; background: #202020; color: #d9eaff; border-radius: 50%; font-size: 16px; font-weight: 600; object-fit: cover; }
     button.avatar { padding: 0; border: 1px solid #303030; cursor: pointer; }
     button.avatar:hover { border-color: #777; }
-    .account-profile-button { display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 12px; padding: 8px; background: transparent; color: var(--text); text-align: left; border: 1px solid var(--border); border-radius: 10px; }
+    .account-profile-button { display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 12px; padding: 8px; background: transparent; color: var(--text); text-align: left; border: 1px solid var(--border); border-radius: 5px; }
     .account-profile-button:hover { background: #1a1a1a; }
     .account-profile-copy { min-width: 0; flex: 1; }
     .account-profile-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -97,7 +100,7 @@
 
     .crop-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.76); }
     .crop-modal.hidden { display: none; }
-    .crop-dialog { width: min(100%, 430px); max-height: min(92dvh, 760px); overflow-y: auto; padding: 22px; background: #111; border: 1px solid #303030; border-radius: 16px; box-shadow: 0 24px 80px rgba(0,0,0,.4); }
+    .crop-dialog { width: min(100%, 430px); max-height: min(92dvh, 760px); overflow-y: auto; padding: 22px; background: #111; border: 1px solid #303030; border-radius: 7px; box-shadow: 0 24px 80px rgba(0,0,0,.4); }
     .crop-dialog h2 { margin: 0 0 7px; font-size: 20px; }
     .crop-dialog p { margin: 0 0 18px; color: var(--muted); line-height: 1.5; }
     .crop-stage { width: min(100%, 300px); aspect-ratio: 1; margin: 0 auto 18px; position: relative; overflow: hidden; border-radius: 50%; background: #252525; touch-action: none; cursor: grab; }
@@ -116,9 +119,9 @@
     .unread-badge { min-width: 20px; height: 20px; padding: 0 6px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: #e53935; color: #fff; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 20px; }
     .person-subtitle { margin-top: 4px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
     .item-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
-    .empty { padding: 28px 16px; color: var(--muted); text-align: center; line-height: 1.5; border: 1px dashed #303030; border-radius: 10px; }
+    .empty { padding: 28px 16px; color: var(--muted); text-align: center; line-height: 1.5; border: 1px dashed #303030; border-radius: 5px; }
     .subheading { margin: 28px 0 12px; font-size: 15px; font-weight: 600; }
-    .settings-card { max-width: 520px; padding: 20px; background: #101010; border: 1px solid var(--border); border-radius: 12px; }
+    .settings-card { max-width: 520px; padding: 20px; background: #101010; border: 1px solid var(--border); border-radius: 5px; }
     .settings-card .field { margin-top: 18px; }
 
     .chat-panel { height: calc(100vh - 70px); min-height: 350px; display: flex; flex-direction: column; }
@@ -136,7 +139,7 @@
     .message-image-link { width: fit-content; max-width: 100%; align-self: flex-start; display: block; margin: 0; padding: 0; line-height: 0; flex-shrink: 1; }
     .message-row.mine .message-image-link { align-self: flex-end; margin-right: 0; margin-left: auto; }
     .message-row:not(.mine) .message-image-link { align-self: flex-start; margin-right: auto; margin-left: 0; }
-    .message-media { max-width: 100%; max-height: 420px; display: block; background: #080808; border-radius: 10px; object-fit: contain; }
+    .message-media { max-width: 100%; max-height: 420px; display: block; background: #080808; border-radius: 5px; object-fit: contain; }
     .message-image-link .message-media { width: auto; max-width: min(100%, 380px); height: auto; }
     video.message-media { width: 100%; height: auto; }
     .message-caption { max-width: 100%; margin-top: 8px; overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.45; }
@@ -145,7 +148,7 @@
     .message-time, .message-receipt { white-space: nowrap; }
     .message-receipt.read { color: #65b8ff; }
 
-    .youtube-preview { width: 100%; max-width: 340px; margin-top: 7px; align-self: flex-start; overflow: hidden; display: flex; flex-direction: column; background: #171717; color: var(--text); text-decoration: none; border: 1px solid #303030; border-radius: 10px; transition: background .15s, border-color .15s; }
+    .youtube-preview { width: 100%; max-width: 340px; margin-top: 7px; align-self: flex-start; overflow: hidden; display: flex; flex-direction: column; background: #171717; color: var(--text); text-decoration: none; border: 1px solid #303030; border-radius: 5px; transition: background .15s, border-color .15s; }
     .youtube-preview:hover { background: #202020; border-color: #444; }
     .message-row.mine .youtube-preview { align-self: flex-end; }
     .youtube-thumbnail { width: 100%; aspect-ratio: 16 / 9; display: block; object-fit: cover; background: #090909; }
@@ -180,7 +183,7 @@
     .upload-fill { width: 0; height: 100%; background: var(--blue); transition: width .15s; }
 
     /* Voice and video calls */
-    .incoming-call { position: fixed; top: 16px; left: 50%; z-index: 150; width: min(92vw, 400px); padding: 12px 14px; display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid #303030; border-radius: 10px; transform: translateX(-50%); }
+    .incoming-call { position: fixed; top: 16px; left: 50%; z-index: 150; width: min(92vw, 400px); padding: 12px 14px; display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid #303030; border-radius: 5px; transform: translateX(-50%); }
     .incoming-call-info { min-width: 0; flex: 1; }
     .incoming-call-title { font-weight: 600; overflow-wrap: anywhere; }
     .incoming-call-text { margin-top: 3px; color: var(--muted); font-size: 12px; }
@@ -196,7 +199,7 @@
     .call-ring { padding: 6px; border: 3px solid transparent; border-radius: 50%; transition: border-color .15s; }
     .call-avatar { width: 128px; height: 128px; font-size: 48px; }
     .call-name { max-width: 100%; font-weight: 600; font-size: 16px; text-align: center; overflow-wrap: anywhere; }
-    .call-tile video { display: none; width: 100%; max-height: calc(100dvh - 250px); aspect-ratio: 4 / 3; object-fit: cover; background: #080808; border: 3px solid var(--border); border-radius: 10px; transition: border-color .15s; }
+    .call-tile video { display: none; width: 100%; max-height: calc(100dvh - 250px); aspect-ratio: 4 / 3; object-fit: cover; background: #080808; border: 3px solid var(--border); border-radius: 5px; transition: border-color .15s; }
     #localVideo { transform: scaleX(-1); }
     .call-tile.has-video video { display: block; }
     .call-tile.has-video .call-ring { display: none; }
@@ -296,6 +299,131 @@
       .topbar h1 { flex: 0 1 auto; }
       .menu-toggle { order: 2; margin-left: auto; }
     }
+  
+    .home-section { margin-top: 28px; }
+    .home-section-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px; }
+    .home-section-heading h3 { margin:0; font-size:16px; font-weight:600; }
+    .friends-heading-row { display:flex; align-items:center; justify-content:center; position:relative; margin:26px 0 14px; }
+    .friends-heading-row h3 { margin:0; text-align:center; font-size:16px; font-weight:600; }
+    .friends-heading-row button { position:absolute; right:0; }
+    .group-list-item { display:flex; align-items:center; gap:12px; width:100%; padding:13px 14px; text-align:left; border:1px solid var(--border); border-radius:12px; background:var(--panel); color:var(--text); cursor:pointer; }
+    .group-list-item:hover { background:var(--hover); }
+    .group-icon { width:42px; height:42px; border-radius:5px; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:#20232a; font-size:21px; }
+    .group-list-copy { min-width:0; flex:1; }
+    .group-list-copy strong,.group-list-copy span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .group-list-copy span { margin-top:4px; font-size:12px; color:var(--muted); }
+
+    .confirm-modal { position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,.72); backdrop-filter:blur(4px); }
+    .confirm-modal.hidden { display:none; }
+    .confirm-dialog { width:min(100%,390px); padding:24px; background:var(--panel,#111318); color:var(--text,#f5f6f8); border:1px solid var(--border,#262a33); border-radius:8px; box-shadow:0 20px 70px rgba(0,0,0,.5); }
+    .confirm-dialog h2 { margin:0 0 10px; font-size:20px; }
+    .confirm-dialog p { margin:0; color:var(--muted,#9298a5); line-height:1.5; }
+    .confirm-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; }
+    .confirm-actions .danger { background:#d93645; color:white; border:1px solid #d93645; }
+    .confirm-actions .danger:hover { background:#b92b38; }
+
+    .group-modal { position:fixed; inset:0; z-index:120; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(0,0,0,.76); }
+    .group-modal.hidden { display:none; }
+    .group-dialog { width:min(100%,560px); max-height:min(88vh,760px); overflow:auto; padding:24px; border:1px solid var(--border); border-radius:18px; background:var(--panel); box-shadow:0 20px 70px rgba(0,0,0,.35); }
+    .group-dialog-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; }
+    .group-dialog-header h2 { margin:0; font-size:21px; }
+    .group-dialog .field { margin-bottom:16px; }
+    .group-icon-options { display:flex; flex-wrap:wrap; gap:8px; }
+    .group-icon-choice { width:42px; height:42px; border:1px solid var(--border); border-radius:12px; background:var(--input); font-size:20px; cursor:pointer; }
+    .group-icon-choice.selected { border-color:var(--blue); box-shadow:inset 0 0 0 1px var(--blue); }
+    .group-member-picker { display:flex; flex-direction:column; gap:8px; max-height:210px; overflow:auto; margin:12px 0; }
+    .group-member-option { display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--border); border-radius:10px; }
+    .group-member-option input { width:16px; height:16px; accent-color:var(--blue); }
+    .group-member-option span { flex:1; min-width:0; }
+    .group-member-option small { display:block; color:var(--muted); margin-top:3px; }
+    .group-system-message { align-self:center; max-width:90%; padding:6px 12px; border-radius:12px; background:#1b1d22; color:#a4a7af; font-size:12px; line-height:1.45; text-align:center; margin:10px auto; }
+    .group-header-edit { margin-left:auto; }
+    .count-badge { display:inline-flex; min-width:18px; height:18px; padding:0 5px; align-items:center; justify-content:center; border-radius:10px; background:var(--blue); color:white; font-size:11px; font-weight:700; margin-left:7px; }
+    .home-request-count { color:var(--muted); font-size:12px; margin-left:6px; }
+    .group-edit-row { display:flex; gap:8px; }
+    .group-edit-row > * { flex:1; min-width:0; }
+    @media (max-width:600px) { .friends-heading-row { justify-content:flex-start; } .friends-heading-row h3 { text-align:left; } .friends-heading-row button { position:static; margin-left:auto; } .group-dialog { padding:18px; } }
+
+
+    /* Celio visual refinement */
+    :root {
+      --bg: #08090c;
+      --panel: #101217;
+      --border: #252a34;
+      --text: #f4f6fa;
+      --muted: #858d9b;
+      --blue: #1685ff;
+      --incoming: #1a1e27;
+      --input: #0b0e14;
+    }
+    body { background: radial-gradient(ellipse at 15% -15%, rgba(22,133,255,.09), transparent 38%), var(--bg); letter-spacing: -.12px; }
+    button { font-weight: 500; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid rgba(22,133,255,.8); outline-offset: 2px; }
+    input, textarea, select { background: var(--input); border: 1px solid var(--border); border-radius: 5px; transition: border-color .18s, background .18s; }
+    input:hover, textarea:hover, select:hover { border-color: #343b49; }
+    input:focus, textarea:focus, select:focus { border-color: var(--blue); background: #0d1119; }
+    .primary { background: var(--blue); border-radius: 5px; box-shadow: 0 2px 10px rgba(22,133,255,.13); }
+    .primary:hover { background: #3695ff; }
+    .secondary { background: #1a1e26; border: 1px solid #292e39; border-radius: 5px; }
+    .secondary:hover { background: #232936; }
+    .danger { border: 1px solid rgba(255,85,85,.15); border-radius: 5px; }
+    .status { font-size: 12px; }
+    .brand { letter-spacing: -1.6px; }
+    .auth-card { max-width: 390px; }
+    .auth-card h1 { letter-spacing: -.65px; }
+    .auth-card input { min-height: 46px; }
+    .auth-card .primary { min-height: 45px; }
+    #app, .app-shell, .main-content, .content-area { min-width: 0; }
+    .sidebar { background: rgba(13,15,20,.94); border-color: var(--border); }
+    .nav-button, .sidebar button { transition: background .16s, color .16s, transform .16s; }
+    .nav-button:hover, .sidebar button:hover { background-color: #191e27; }
+    .nav-button.active, .sidebar .active { background: rgba(22,133,255,.13); color: #69b1ff; }
+    .chat-list, .friends-list, .requests-list, .groups-list { gap: 5px; }
+    .chat-item, .friend-item, .request-item, .group-item, .group-card, .home-section, .panel, .settings-card {
+      border-color: var(--border); border-radius: 5px;
+    }
+    .chat-item:hover, .friend-item:hover, .group-item:hover, .group-card:hover { background: #151922; border-color: #303746; }
+    .chat-header, .page-header, .friends-heading-row { border-color: var(--border); }
+    .chat-header { min-height: 68px; }
+    .chat-messages { scroll-behavior: smooth; }
+    .message-bubble { border-radius: 8px; }
+    .message-bubble.outgoing { border-bottom-right-radius: 6px; }
+    .message-bubble.incoming { border-bottom-left-radius: 6px; }
+    .chat-composer, .message-composer { border-color: var(--border); }
+    .chat-composer input, .message-composer input { border-radius: 5px; padding-left: 12px; }
+    .friends-heading-row { padding-bottom: 16px; margin-bottom: 16px; }
+    .friends-heading-row h3, .home-section h3, .page-header h1 { letter-spacing: -.45px; }
+    .home-section, .group-card, .group-dialog { background: rgba(16,18,23,.94); border: 1px solid var(--border); }
+    .home-section { padding: 18px; margin-bottom: 14px; }
+    .group-card { padding: 13px 15px; transition: background .16s, border-color .16s, transform .16s; }
+    .group-card:hover { transform: translateY(-1px); }
+    .group-avatar, .chat-avatar, .avatar { flex-shrink: 0; }
+    .group-dialog { box-shadow: 0 24px 90px rgba(0,0,0,.55); backdrop-filter: blur(18px); }
+    .group-dialog-header { padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .group-icon-choice { background: #0c0f15; border-radius: 5px; transition: border-color .15s, background .15s, transform .15s; }
+    .group-icon-choice:hover { transform: translateY(-1px); background: #171d28; }
+    .group-member-option { background: #0d1016; border-radius: 5px; }
+    .group-member-option:hover { border-color: #3a4353; }
+    .group-system-message { background: #171b23; border: 1px solid #242a35; }
+    .group-picture-row { display:flex; align-items:center; gap:14px; margin:10px 0 14px; }
+    .group-picture-preview { width:66px; height:66px; padding:0; display:grid; place-items:center; overflow:hidden; background:#151a23; border:1px solid var(--border); border-radius:5px; font-size:27px; cursor:pointer; }
+    .group-icon-image { width:100%; height:100%; display:block; object-fit:cover; border-radius:inherit; }
+    .group-list-item { border-radius:5px; }
+    .home-section { border-radius:5px; }
+    .group-dialog { border-radius:7px; }
+    .group-member-option { border-radius:4px; }
+    ::selection { background: rgba(22,133,255,.32); }
+    * { scrollbar-width: thin; scrollbar-color: #303642 transparent; }
+    @media (min-width: 900px) {
+      .home-layout { gap: 18px; }
+      .home-section { padding: 20px; }
+    }
+    @media (max-width: 600px) {
+      .home-section { padding: 14px; }
+      .group-dialog { border-radius: 7px; }
+      .primary, .secondary { min-height: 40px; }
+    }
+
   </style>
 </head>
 <body>
@@ -339,8 +467,7 @@
       <div>
         <div class="section-label">Workspace</div>
         <div class="sidebar-nav">
-          <button class="nav-button active" data-page="friends">Friends</button>
-          <button class="nav-button" data-page="requests">Requests</button>
+          <button class="nav-button active" data-page="home">Home <span id="homeRequestBadge" class="count-badge hidden">0</span></button>
           <button class="nav-button" data-page="settings">Profile</button>
         </div>
       </div>
@@ -364,23 +491,28 @@
         <h1 id="topbarTitle">Friends</h1>
       </header>
       <section id="friendsPage" class="content">
-        <h2 class="page-heading">Friends</h2>
-        <p class="page-description">Add people by their Celio number, like +1 (555) 123-4567.</p>
-        <form id="friendSearchForm" class="search-row">
-          <input id="friendSearchInput" type="tel" inputmode="tel" placeholder="Celio number" maxlength="32" autocomplete="off" required>
-          <button class="primary" type="submit">Find</button>
-        </form>
-        <div id="searchResults" class="list"></div>
-        <h3 class="subheading">Your friends</h3>
-        <div id="friendsList" class="list"><div class="empty">Loading friends...</div></div>
-        <p id="friendsStatus" class="status" aria-live="polite"></p>
+        <div class="home-section" style="margin-top:20px">
+          <div class="home-section-heading"><h3>Add people</h3></div>
+          <p class="page-description" style="margin:0 0 12px">Your Celio number is, <strong id="addPeopleCelioNumber">Loading...</strong></p>
+          <form id="friendSearchForm" class="search-row">
+            <input id="friendSearchInput" type="tel" inputmode="tel" placeholder="Celio number" maxlength="32" autocomplete="off" required>
+            <button class="primary" type="submit">Find</button>
+          </form>
+          <div id="searchResults" class="list"></div>
+        </div>
+        <div class="home-section">
+          <div class="home-section-heading"><h3>Friend requests <span id="homeRequestCount" class="home-request-count">0</span></h3></div>
+          <div id="requestsList" class="list"><div class="empty">Loading requests...</div></div>
+          <p id="requestsStatus" class="status" aria-live="polite"></p>
+        </div>
+        <div id="groupsList" class="hidden"></div>
+        <div class="home-section">
+          <div class="friends-heading-row"><h3>Friends</h3><button id="createGroupButton" type="button" class="secondary">Create Group</button></div>
+          <div id="friendsList" class="list"><div class="empty">Loading friends...</div></div>
+          <p id="friendsStatus" class="status" aria-live="polite"></p>
+        </div>
       </section>
-      <section id="requestsPage" class="content hidden">
-        <h2 class="page-heading">Friend requests</h2>
-        <p class="page-description">Manage requests you've received.</p>
-        <div id="requestsList" class="list"><div class="empty">Loading requests...</div></div>
-        <p id="requestsStatus" class="status" aria-live="polite"></p>
-      </section>
+      <section id="requestsPage" class="content hidden"><div id="requestsListLegacy" class="hidden"></div></section>
       <section id="settingsPage" class="content hidden">
         <h2 class="page-heading">Your profile</h2>
         <p class="page-description">Change how you appear to other people on Celio.</p>
@@ -423,6 +555,7 @@
             </div>
             <button id="voiceCallButton" class="secondary" type="button" disabled title="Start a voice call">Voice</button>
             <button id="videoCallButton" class="secondary" type="button" disabled title="Start a video call">Video</button>
+            <button id="groupManageButton" class="secondary hidden" type="button">Group settings</button>
           </header>
           <div id="messagesList" class="messages"><div class="chat-empty">Loading messages...</div></div>
           <div id="uploadTrack" class="upload-track hidden" aria-label="Upload progress"><div id="uploadFill" class="upload-fill"></div></div>
@@ -440,7 +573,28 @@
     </main>
   </section>
 
-  <div id="cropModal" class="crop-modal hidden" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+  <div id="groupModal" class="group-modal hidden" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle">
+  <div class="group-dialog">
+    <div class="group-dialog-header"><h2 id="groupModalTitle">Create Group</h2><button type="button" id="closeGroupModal" class="secondary">Close</button></div>
+    <form id="groupForm">
+      <div class="field"><label for="groupNameInput">Group name</label><input id="groupNameInput" maxlength="50" autocomplete="off" placeholder="Name your group" required></div>
+      <div class="field"><label>Group picture</label><div class="group-picture-row"><button type="button" id="groupPictureButton" class="group-picture-preview" aria-label="Upload group picture">👥</button><div><button type="button" id="uploadGroupPictureButton" class="secondary">Upload image</button><p class="page-description" style="margin:6px 0 0">Choose a picture for this group.</p></div><input id="groupPictureInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp"></div><div id="groupIconOptions" class="group-icon-options"></div></div>
+      <div class="field"><label for="groupUserSearchInput">Add friends or users by Celio number</label><div class="search-row"><input id="groupUserSearchInput" type="tel" inputmode="tel" maxlength="32" placeholder="Celio number" autocomplete="off"><button type="button" id="groupUserSearchButton" class="secondary">Find</button></div><p id="groupSearchStatus" class="status" aria-live="polite"></p></div>
+      <div class="field"><label>Choose members</label><div id="groupMemberPicker" class="group-member-picker"></div></div>
+      <p id="groupFormStatus" class="status" aria-live="polite"></p>
+      <div class="group-edit-row"><button type="button" id="cancelGroupButton" class="secondary">Cancel</button><button type="submit" id="saveGroupButton" class="primary">Create Group</button></div>
+    </form>
+  </div>
+</div>
+
+<div id="removeFriendModal" class="confirm-modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="removeFriendTitle" aria-describedby="removeFriendMessage">
+  <div class="confirm-dialog">
+    <h2 id="removeFriendTitle">Are you sure?</h2>
+    <p id="removeFriendMessage">Do you want to remove this person from your friends?</p>
+    <div class="confirm-actions"><button id="cancelRemoveFriend" type="button" class="secondary">Cancel</button><button id="confirmRemoveFriend" type="button" class="danger">Remove friend</button></div>
+  </div>
+</div>
+<div id="cropModal" class="crop-modal hidden" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
     <div class="crop-dialog">
       <h2 id="cropTitle">Adjust profile picture</h2>
       <p>Drag the image to reposition it. Use the slider to zoom in or out.</p>
@@ -531,8 +685,8 @@
           "turn:us.relay.metered.ca:443",
           "turns:us.relay.metered.ca:443?transport=tcp"
         ],
-        username: "e71eba98d6a4196118021445",
-        credential: "tlG7SC1LPLYpZMj4"
+        username: "YOUR_NEW_METERED_USERNAME",
+        credential: "YOUR_NEW_METERED_CREDENTIAL"
       }
     ];
 
@@ -559,6 +713,16 @@
     let setupUser = null;
     let activeChatId = null;
     let activeFriendId = null;
+    let activeChatKind = "direct";
+    let activeChatMembers = [];
+    let activeGroupData = null;
+    let groupsUnsubscribe = null;
+    let groupsCache = [];
+    let groupModalMode = "create";
+    let editingGroupId = null;
+    let selectedGroupIcon = "👥";
+    let groupSearchResults = [];
+    const GROUP_ICONS = ["👥","💬","🎮","⭐","❤️","⚽","🎵","📚","🌙","🚀","🐾","🌿"];
     let friendsUnsubscribe = null;
     let requestsUnsubscribe = null;
     let messagesUnsubscribe = null;
@@ -1592,7 +1756,7 @@
     }
 
     function handleTypingInput() {
-      if (!activeChatId || !activeFriendId) return;
+      if (!activeChatId || (activeChatKind !== "group" && !activeFriendId)) return;
       if (!$("messageInput").value.trim()) {
         stopMyTyping();
         return;
@@ -1746,12 +1910,13 @@
     }
 
     function stopListeners() {
-      [friendsUnsubscribe, requestsUnsubscribe, messagesUnsubscribe, typingUnsubscribe, incomingCallsUnsubscribe].forEach(unsubscribe => {
+      [friendsUnsubscribe, requestsUnsubscribe, groupsUnsubscribe, messagesUnsubscribe, typingUnsubscribe, incomingCallsUnsubscribe].forEach(unsubscribe => {
         if (unsubscribe) unsubscribe();
       });
 
       friendsUnsubscribe = null;
       requestsUnsubscribe = null;
+      groupsUnsubscribe = null;
       messagesUnsubscribe = null;
       typingUnsubscribe = null;
       incomingCallsUnsubscribe = null;
@@ -1774,27 +1939,30 @@
       typingUnsubscribe = null;
       activeChatId = null;
       activeFriendId = null;
+      activeChatKind = "direct";
+      activeChatMembers = [];
+      activeGroupData = null;
+      $("groupManageButton").classList.add("hidden");
       friendIsTyping = false;
       setCallButtonsDisabled(true);
+      $("groupManageButton").classList.add("hidden");
       $("messagesList").replaceChildren();
     }
 
     function showPage(page) {
+      if (page === "friends") page = "home";
       closeActiveChat();
-      $("friendsPage").classList.toggle("hidden", page !== "friends");
-      $("requestsPage").classList.toggle("hidden", page !== "requests");
+      $("friendsPage").classList.toggle("hidden", page !== "home");
+      $("requestsPage").classList.add("hidden");
       $("settingsPage").classList.toggle("hidden", page !== "settings");
       $("chatPage").classList.add("hidden");
-      $("topbarTitle").textContent = page === "friends" ? "Friends" : page === "requests" ? "Requests" : "Profile";
+      $("topbarTitle").textContent = page === "home" ? "Home" : "Profile";
       if (page === "settings" && currentProfile) {
         $("newUsernameInput").value = currentProfile.username || "";
         $("profileCelioNumber").textContent = formatCelioNumber(currentProfile.celioNumber);
         renderAvatarInto($("profileAvatarButton"), currentProfile);
       }
-
-      document.querySelectorAll("[data-page]").forEach(button => {
-        button.classList.toggle("active", button.dataset.page === page);
-      });
+      document.querySelectorAll("[data-page]").forEach(button => button.classList.toggle("active", button.dataset.page === page));
     }
 
     function showChatPanel() {
@@ -2139,11 +2307,6 @@
       const renderId = ++friendsRenderId;
       const friends = friendsCache.slice();
 
-      if (!friends.length) {
-        renderEmpty("friendsList", "No friends yet. Enter a Celio number above to add someone.");
-        return;
-      }
-
       const profiles = await Promise.all(
         friends.map(friend => getProfileCached(friend.uid).catch(error => {
           console.error("[Celio] Could not load a friend's profile:", error?.code, error?.message);
@@ -2161,22 +2324,99 @@
         if (!profile || seen.has(profile.uid)) return;
         seen.add(profile.uid);
 
-        rows.push(makePersonRow(profile, "Friend", [{
+        const row = makePersonRow(profile, "Friend", [{
           label: "Message",
           className: "primary",
           onClick: () => openChat(profile.uid, profile.username)
-        }], { unreadBadge: true }));
+        }], { unreadBadge: true });
+
+        const actions = row.querySelector(".item-actions");
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "remove-friend-button";
+        removeButton.setAttribute("aria-label", `Remove ${profile.username || "friend"}`);
+        removeButton.title = "Remove friend";
+        removeButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg>';
+        removeButton.addEventListener("click", () => removeFriend(profile));
+        actions.appendChild(removeButton);
+        rows.push(row);
       });
 
-      if (!rows.length) {
-        renderEmpty("friendsList", "Your friends will appear here.");
+      const groupRows = groupsCache.slice().sort((a,b) => {
+        const at = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
+        const bt = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+        return bt - at;
+      }).map(group => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "group-list-item";
+        const icon = document.createElement("span"); icon.className = "group-icon";
+        if (typeof group.icon === "string" && /^https?:\/\//i.test(group.icon)) {
+          const image = document.createElement("img"); image.src = group.icon; image.alt = ""; image.className = "group-icon-image"; icon.appendChild(image);
+        } else icon.textContent = group.icon || "👥";
+        const copy = document.createElement("span"); copy.className = "group-list-copy";
+        const name = document.createElement("strong"); name.textContent = group.name || "Group chat";
+        const detail = document.createElement("span"); detail.textContent = `${(group.participants || []).length} members${group.lastMessage ? " · " + group.lastMessage : ""}`;
+        copy.append(name, detail); button.append(icon, copy);
+        button.addEventListener("click", () => openGroupChat(group.id));
+        return button;
+      });
+      if (!rows.length && !groupRows.length) {
+        renderEmpty("friendsList", "No friends yet. Add someone above to get started.");
         return;
       }
-
-      list.replaceChildren(...rows);
+      list.replaceChildren(...rows, ...groupRows);
       profiles.forEach(profile => {
         if (profile) updateFriendUnreadBadge(profile.uid, unreadCounts.get(profile.uid) || 0);
       });
+    }
+
+    function confirmRemoveFriend(friendName) {
+      return new Promise(resolve => {
+        const modal = $("removeFriendModal");
+        const message = $("removeFriendMessage");
+        const cancel = $("cancelRemoveFriend");
+        const confirm = $("confirmRemoveFriend");
+        message.textContent = `Are you sure you want to remove ${friendName} from your friends?`;
+        modal.classList.remove("hidden");
+        confirm.focus();
+        const finish = result => {
+          modal.classList.add("hidden");
+          cancel.removeEventListener("click", onCancel);
+          confirm.removeEventListener("click", onConfirm);
+          modal.removeEventListener("click", onBackdrop);
+          document.removeEventListener("keydown", onKeydown);
+          resolve(result);
+        };
+        const onCancel = () => finish(false);
+        const onConfirm = () => finish(true);
+        const onBackdrop = event => { if (event.target === modal) finish(false); };
+        const onKeydown = event => { if (event.key === "Escape") finish(false); };
+        cancel.addEventListener("click", onCancel);
+        confirm.addEventListener("click", onConfirm);
+        modal.addEventListener("click", onBackdrop);
+        document.addEventListener("keydown", onKeydown);
+      });
+    }
+
+    async function removeFriend(profile) {
+      if (!currentUser || !profile?.uid || profile.uid === currentUser.uid) return;
+      const friendName = profile.username || "this person";
+      const confirmed = await confirmRemoveFriend(friendName);
+      if (!confirmed) return;
+
+      try {
+        const myContact = db.collection("friends").doc(currentUser.uid)
+          .collection("contacts").doc(profile.uid);
+        const theirContact = db.collection("friends").doc(profile.uid)
+          .collection("contacts").doc(currentUser.uid);
+        await Promise.all([myContact.delete(), theirContact.delete()]);
+        profileCache.delete(profile.uid);
+        showToast(`${friendName} was removed from your friends.`);
+      } catch (error) {
+        console.error("Could not remove friend:", error?.code, error?.message || error);
+        showToast(friendlyError(error));
+      }
     }
 
     function startRequestsListener() {
@@ -2197,6 +2437,9 @@
     async function renderRequests() {
       const renderId = ++requestsRenderId;
       const requests = requestsCache.slice();
+      $("homeRequestCount").textContent = String(requests.length);
+      $("homeRequestBadge").textContent = String(requests.length);
+      $("homeRequestBadge").classList.toggle("hidden", requests.length === 0);
 
       if (!requests.length) {
         renderEmpty("requestsList", "You don't have any pending requests.");
@@ -2526,7 +2769,9 @@
       const chatId = activeChatId;
       const friendId = activeFriendId;
 
-      if (!currentUser || !chatId || !friendId || document.visibilityState !== "visible") return;
+      if (!currentUser || !chatId || document.visibilityState !== "visible") return;
+      if (activeChatKind === "group") return;
+      if (!friendId) return;
 
       try {
         /* Mark all incoming messages read, not just the latest 100. */
@@ -2555,6 +2800,12 @@
       const row = document.createElement("div");
       row.className = "message-row" + (mine ? " mine" : "");
       row.dataset.messageId = doc.id;
+
+      if (data.messageType === "system") {
+        row.className = "group-system-message";
+        row.textContent = data.text || "Group updated.";
+        return row;
+      }
 
       if (data.messageType === "callLog") {
         row.classList.add("call-log-message");
@@ -2638,6 +2889,7 @@
       $("chatFriendName").textContent = friendName || "Conversation";
       renderAvatarInto($("chatAvatar"), await getProfile(friendId) || { username: friendName });
       $("chatSubtitle").textContent = "Direct message";
+      $("groupManageButton").classList.add("hidden");
       $("messagesList").replaceChildren();
 
       const loading = document.createElement("div");
@@ -2682,7 +2934,10 @@
 
         activeChatId = chatId;
         activeFriendId = friendId;
-
+        activeChatKind = "direct";
+        activeChatMembers = [currentUser.uid, friendId];
+        activeGroupData = null;
+        $("groupManageButton").classList.add("hidden");
         $("messageInput").disabled = false;
         $("sendButton").disabled = false;
         $("attachButton").disabled = false;
@@ -2784,15 +3039,16 @@
     }
 
     async function verifyChat(chatId, friendId) {
-      if (!(await hasMutualFriendship(friendId))) {
-        throw new Error("You must be mutual friends to message this account.");
-      }
-
       const chat = await db.collection("chats").doc(chatId).get();
-      const participants = chat.exists ? (chat.data().participants || []) : [];
-
-      if (!chat.exists || !participants.includes(currentUser.uid) || !participants.includes(friendId)) {
-        throw new Error("This conversation is unavailable.");
+      const data = chat.exists ? chat.data() : {};
+      const participants = data.participants || [];
+      if (!chat.exists || !participants.includes(currentUser.uid)) throw new Error("This conversation is unavailable.");
+      if (data.chatType === "group") {
+        if (friendId && !participants.includes(friendId)) throw new Error("This conversation is unavailable.");
+        return;
+      }
+      if (!friendId || !(await hasMutualFriendship(friendId)) || !participants.includes(friendId) || participants.length !== 2) {
+        throw new Error("You must be mutual friends to message this account.");
       }
     }
 
@@ -2802,11 +3058,12 @@
       event.preventDefault();
 
       const text = $("messageInput").value.trim();
-      if (!text || !activeChatId || !activeFriendId || sendingMessage) return;
+      if (!text || !activeChatId || (activeChatKind !== "group" && !activeFriendId) || sendingMessage) return;
 
       const chatId = activeChatId;
       const friendId = activeFriendId;
       const chatRef = db.collection("chats").doc(chatId);
+      const chatKind = activeChatKind;
 
       sendingMessage = true;
       $("sendButton").disabled = true;
@@ -2847,6 +3104,217 @@
           $("attachButton").disabled = false;
         }
       }
+    }
+
+    /* Group chats */
+
+    function startGroupsListener() {
+      if (groupsUnsubscribe) groupsUnsubscribe();
+      groupsUnsubscribe = db.collection("chats").where("participants", "array-contains", currentUser.uid)
+        .onSnapshot(snapshot => {
+          groupsCache = snapshot.docs.filter(doc => doc.data().chatType === "group").map(doc => ({ id: doc.id, ...doc.data() }));
+          renderGroups();
+        }, error => {
+          console.error("Group list listener error:", error);
+          renderEmpty("groupsList", "Group chats could not be loaded.");
+        });
+    }
+
+    function renderGroups() {
+      renderFriends();
+    }
+
+    function showGroupModal(mode = "create", group = null) {
+      groupModalMode = mode;
+      editingGroupId = group?.id || null;
+      selectedGroupIcon = group?.icon || "👥";
+      renderGroupPicturePreview();
+      $("groupModalTitle").textContent = mode === "edit" ? "Group settings" : "Create Group";
+      $("saveGroupButton").textContent = mode === "edit" ? "Save changes" : "Create Group";
+      $("groupNameInput").value = group?.name || "";
+      $("groupUserSearchInput").value = "";
+      $("groupSearchStatus").textContent = "";
+      $("groupFormStatus").textContent = "";
+      groupSearchResults = [];
+      renderGroupIconOptions();
+      renderGroupMemberPicker(group?.participants || []);
+      $("groupModal").classList.remove("hidden");
+      $("groupNameInput").focus();
+    }
+
+    function renderGroupPicturePreview() {
+      const preview = $("groupPictureButton");
+      preview.replaceChildren();
+      if (typeof selectedGroupIcon === "string" && /^https?:\/\//i.test(selectedGroupIcon)) {
+        const image = document.createElement("img"); image.src = selectedGroupIcon; image.alt = "Group picture preview"; image.className = "group-icon-image"; preview.appendChild(image);
+      } else preview.textContent = selectedGroupIcon || "👥";
+    }
+
+    async function uploadGroupPicture(file) {
+      if (!file || !file.type.startsWith("image/")) return;
+      if (file.size > 8 * 1024 * 1024) { $("groupSearchStatus").textContent = "Choose an image smaller than 8 MB."; return; }
+      const button = $("uploadGroupPictureButton"); button.disabled = true;
+      $("groupSearchStatus").textContent = "Uploading picture...";
+      try {
+        selectedGroupIcon = await uploadProfilePicture(file);
+        renderGroupPicturePreview(); renderGroupIconOptions();
+        $("groupSearchStatus").textContent = "Group picture ready.";
+      } catch (error) {
+        console.error("Group picture upload failed:", error);
+        $("groupSearchStatus").textContent = error.message || "Could not upload this image.";
+      } finally { button.disabled = false; $("groupPictureInput").value = ""; }
+    }
+
+    function closeGroupModal() { $("groupModal").classList.add("hidden"); }
+
+    function renderGroupIconOptions() {
+      const holder = $("groupIconOptions"); holder.replaceChildren();
+      GROUP_ICONS.forEach(icon => {
+        const button = document.createElement("button"); button.type = "button"; button.className = "group-icon-choice" + (icon === selectedGroupIcon ? " selected" : "");
+        button.textContent = icon; button.setAttribute("aria-label", `Choose ${icon} icon`);
+        button.addEventListener("click", () => { selectedGroupIcon = icon; renderGroupIconOptions(); renderGroupPicturePreview(); });
+        holder.appendChild(button);
+      });
+    }
+
+    async function renderGroupMemberPicker(selectedIds = []) {
+      const holder = $("groupMemberPicker"); holder.replaceChildren();
+      const unique = new Map();
+      for (const friend of friendsCache) {
+        try { const profile = await getProfileCached(friend.uid); if (profile) unique.set(profile.uid, profile); } catch {}
+      }
+      (selectedIds || []).forEach(async uid => {
+        if (!unique.has(uid) && uid !== currentUser.uid) {
+          try { const profile = await getProfileCached(uid); if (profile) { unique.set(uid, profile); draw(); } } catch {}
+        }
+      });
+      function draw() {
+        holder.replaceChildren();
+        [...unique.values()].filter(profile => profile.uid !== currentUser.uid).sort((a,b) => String(a.username||"").localeCompare(String(b.username||""))).forEach(profile => {
+          holder.appendChild(makeGroupMemberOption(profile, selectedIds.includes(profile.uid)));
+        });
+        groupSearchResults.forEach(profile => {
+          if (!profile || profile.uid === currentUser.uid || unique.has(profile.uid)) return;
+          holder.appendChild(makeGroupMemberOption(profile, selectedIds.includes(profile.uid)));
+        });
+        if (!holder.children.length) renderEmpty("groupMemberPicker", "Find someone by Celio number or add friends first.");
+      }
+      draw();
+    }
+
+    function makeGroupMemberOption(profile, checked) {
+      const label = document.createElement("label"); label.className = "group-member-option";
+      const input = document.createElement("input"); input.type = "checkbox"; input.value = profile.uid; input.checked = checked;
+      const copy = document.createElement("span"); copy.textContent = profile.username || formatCelioNumber(profile.celioNumber) || "Celio user";
+      const number = document.createElement("small"); number.textContent = formatCelioNumber(profile.celioNumber);
+      copy.appendChild(number); label.append(input, copy); return label;
+    }
+
+    async function searchGroupUser() {
+      const raw = $("groupUserSearchInput").value.trim();
+      $("groupSearchStatus").textContent = "";
+      if (!/^[+()\d\s.\-]+$/.test(raw) || normalizeCelioNumber(raw).length !== 10) {
+        $("groupSearchStatus").textContent = "Enter a full Celio number."; return;
+      }
+      try {
+        const digits = normalizeCelioNumber(raw);
+        if (!digits.startsWith("555")) { $("groupSearchStatus").textContent = "Celio numbers start with +1 (555)."; return; }
+        const profile = await findProfileByCelioNumber(digits);
+        if (!profile) { $("groupSearchStatus").textContent = "No user found with that Celio number."; return; }
+        if (profile.uid === currentUser.uid) { $("groupSearchStatus").textContent = "You are already in this group."; return; }
+        groupSearchResults = [profile, ...groupSearchResults.filter(item => item.uid !== profile.uid)];
+        const existing = new Set([...$("groupMemberPicker").querySelectorAll('input[type="checkbox"]')].map(input => input.value));
+        await renderGroupMemberPicker([...existing]);
+        $("groupSearchStatus").textContent = `${profile.username || formatCelioNumber(profile.celioNumber)} is ready to select.`;
+      } catch (error) {
+        console.error(error); $("groupSearchStatus").textContent = friendlyError(error);
+      }
+    }
+
+    function selectedGroupMemberIds() {
+      return [...$("groupMemberPicker").querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value).filter(uid => uid !== currentUser.uid);
+    }
+
+    async function saveGroup(event) {
+      event.preventDefault();
+      const name = $("groupNameInput").value.trim();
+      const memberIds = [...new Set([currentUser.uid, ...selectedGroupMemberIds()])];
+      if (!name) { $("groupFormStatus").textContent = "Enter a group name."; return; }
+      if (memberIds.length < 2) { $("groupFormStatus").textContent = "Choose at least one other person."; return; }
+      const button = $("saveGroupButton"); button.disabled = true; $("groupFormStatus").textContent = "Saving group...";
+      try {
+        if (groupModalMode === "create") {
+          const ref = db.collection("chats").doc();
+          const groupData = { chatType:"group", name, icon:selectedGroupIcon, participants:memberIds, createdBy:currentUser.uid, createdAt:serverTimestamp(), updatedAt:serverTimestamp(), lastMessage:"Group created" };
+          await ref.set(groupData);
+          await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} created the group.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
+          closeGroupModal(); await openGroupChat(ref.id);
+        } else {
+          const ref = db.collection("chats").doc(editingGroupId);
+          const snapshot = await ref.get();
+          if (!snapshot.exists || !(snapshot.data().participants || []).includes(currentUser.uid)) throw new Error("This group is unavailable.");
+          const old = snapshot.data();
+          const oldMembers = old.participants || [];
+          const added = memberIds.filter(uid => !oldMembers.includes(uid));
+          const removed = oldMembers.filter(uid => !memberIds.includes(uid));
+          await ref.update({ name, icon:selectedGroupIcon, participants:memberIds, updatedAt:serverTimestamp(), lastMessage:"Group updated" });
+          for (const uid of added) {
+            const profile = await getProfile(uid);
+            await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} added ${profile?.username || formatCelioNumber(profile?.celioNumber) || "a member"} to the group.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
+          }
+          for (const uid of removed) {
+            const profile = await getProfile(uid);
+            await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} removed ${profile?.username || formatCelioNumber(profile?.celioNumber) || "a member"} from the group.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
+          }
+          if (!added.length && !removed.length) await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} updated the group details.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
+          closeGroupModal();
+          const updated = await ref.get();
+          await openGroupChat(editingGroupId);
+        }
+      } catch (error) {
+        console.error("Could not save group:", error); $("groupFormStatus").textContent = friendlyError(error);
+      } finally { button.disabled = false; }
+    }
+
+    async function openGroupChat(groupId) {
+      closeActiveChat(); showChatPanel();
+      $("messagesList").replaceChildren();
+      const loading = document.createElement("div"); loading.className = "chat-empty"; loading.textContent = "Opening group..."; $("messagesList").appendChild(loading);
+      $("messageInput").value = ""; $("messageInput").disabled = true; $("sendButton").disabled = true; $("attachButton").disabled = true;
+      setCallButtonsDisabled(true); $("groupManageButton").classList.remove("hidden"); setStatus("chatStatus", "");
+      try {
+        const chatRef = db.collection("chats").doc(groupId); const snapshot = await chatRef.get();
+        if (!snapshot.exists) throw new Error("This group is unavailable.");
+        const data = snapshot.data(); const members = data.participants || [];
+        if (data.chatType !== "group" || !members.includes(currentUser.uid)) throw new Error("You are not a member of this group.");
+        activeChatId = groupId; activeFriendId = null; activeChatKind = "group"; activeChatMembers = members; activeGroupData = { id:groupId, ...data };
+        $("chatFriendName").textContent = data.name || "Group chat";
+        const chatAvatar = $("chatAvatar"); chatAvatar.replaceChildren();
+        if (typeof data.icon === "string" && /^https?:\/\//i.test(data.icon)) { const image = document.createElement("img"); image.src = data.icon; image.alt = ""; image.className = "group-icon-image"; chatAvatar.appendChild(image); }
+        else chatAvatar.textContent = data.icon || "👥";
+        $("chatSubtitle").textContent = `${members.length} members`;
+        $("messageInput").disabled = false; $("sendButton").disabled = false; $("attachButton").disabled = false;
+        $("groupManageButton").onclick = () => showGroupModal("edit", activeGroupData);
+        messagesUnsubscribe = chatRef.collection("messages").orderBy("createdAt", "asc").limitToLast(100).onSnapshot(snapshot => {
+          if (activeChatId !== groupId) return;
+          const messages = $("messagesList"); const nearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
+          if (snapshot.empty) { renderEmpty("messagesList", "This is the beginning of your group conversation."); return; }
+          const empty = messages.querySelector(".chat-empty, .empty"); if (empty) empty.remove();
+          const orderedIds = snapshot.docs.map(doc => doc.id);
+          snapshot.docChanges().forEach(change => {
+            const messageId = change.doc.id; const existing = messages.querySelector(`[data-message-id="${messageId}"]`);
+            if (change.type === "removed") { if (existing) existing.remove(); return; }
+            if (change.type === "added" || !existing) {
+              const row = renderMessage(change.doc, "Group", groupId);
+              const targetIndex = orderedIds.indexOf(messageId);
+              const nextRow = [...messages.querySelectorAll("[data-message-id]")].find(item => orderedIds.indexOf(item.dataset.messageId) > targetIndex);
+              if (nextRow) messages.insertBefore(row, nextRow); else messages.appendChild(row);
+            } else if (change.type === "modified") updateMessageMeta(existing, change.doc.data(), change.doc.data().senderId === currentUser.uid);
+          });
+          if (nearBottom) requestAnimationFrame(() => { if (activeChatId === groupId) messages.scrollTo({top:messages.scrollHeight,behavior:"smooth"}); });
+          updateIncomingReceipts(snapshot.docs, groupId);
+        }, error => { console.error("Group message listener error:", error); setStatus("chatStatus", friendlyError(error), "error"); });
+      } catch (error) { console.error(error); $("messagesList").replaceChildren(); setStatus("chatStatus", friendlyError(error), "error"); }
     }
 
     /* Media uploads */
@@ -2924,6 +3392,7 @@
       const chatId = activeChatId;
       const friendId = activeFriendId;
       const chatRef = db.collection("chats").doc(chatId);
+      const chatKind = activeChatKind;
       const caption = $("messageInput").value.trim();
 
       sendingMessage = true;
@@ -3459,6 +3928,17 @@
       });
     });
 
+    $("createGroupButton").addEventListener("click", () => showGroupModal("create"));
+    $("closeGroupModal").addEventListener("click", closeGroupModal);
+    $("cancelGroupButton").addEventListener("click", closeGroupModal);
+    $("groupModal").addEventListener("click", event => { if (event.target === $("groupModal")) closeGroupModal(); });
+    $("groupForm").addEventListener("submit", saveGroup);
+    $("uploadGroupPictureButton").addEventListener("click", () => $("groupPictureInput").click());
+    $("groupPictureButton").addEventListener("click", () => $("groupPictureInput").click());
+    $("groupPictureInput").addEventListener("change", event => uploadGroupPicture(event.target.files?.[0]));
+    $("groupUserSearchButton").addEventListener("click", searchGroupUser);
+    $("groupUserSearchInput").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); searchGroupUser(); } });
+
     /* Start (or restore) a signed-in session */
 
     async function startSession(user) {
@@ -3467,6 +3947,10 @@
       currentProfile = null;
       activeChatId = null;
       activeFriendId = null;
+      activeChatKind = "direct";
+      activeChatMembers = [];
+      activeGroupData = null;
+      groupsCache = [];
       friendsCache = [];
       requestsCache = [];
       friendIsTyping = false;
@@ -3505,6 +3989,7 @@
         applyAuthMode();
 
         $("profileCelioNumber").textContent = formatCelioNumber(currentProfile.celioNumber);
+        $("addPeopleCelioNumber").textContent = formatCelioNumber(currentProfile.celioNumber);
         $("accountName").textContent = currentProfile.username || "Celio user";
         renderAvatarInto($("accountAvatar"), currentProfile);
         renderAvatarInto($("profileAvatarButton"), currentProfile);
@@ -3512,9 +3997,10 @@
         $("authScreen").classList.add("hidden");
         $("appScreen").classList.remove("hidden");
 
-        showPage("friends");
+        showPage("home");
         startFriendsListener();
         startRequestsListener();
+        startGroupsListener();
         startIncomingCallsListener();
 
         /* Background, best-effort: protect the existing username too. */
