@@ -482,7 +482,7 @@
       <button id="endCallButton" class="end-call" type="button">End</button>
     </div>
   </div>
-  <audio id="remoteAudio" autoplay></audio>
+  <audio id="remoteAudio" autoplay playsinline></audio>
   <div id="callToast" class="call-toast hidden" role="status" aria-live="polite"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -513,12 +513,46 @@
     const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,24}$/;
     const USERNAME_HELP = "Usernames must be 3–24 characters and use only letters, numbers, and underscores.";
 
-    /* Calls use the browser's built-in WebRTC. STUN helps two browsers find each other. */
+    /*
+      ---------- CALL NETWORK SETTINGS ----------
+
+      Calls go directly between two browsers when they can. On different networks
+      (school, work, mobile data) that usually fails unless a TURN relay server
+      passes the audio and video along. Paste the server details from your TURN
+      provider below. Example (replace every value with your provider's own):
+
+        const TURN_SERVERS = [
+          {
+            urls: [
+              "turn:YOUR-TURN-HOST:80",
+              "turn:YOUR-TURN-HOST:443?transport=tcp",
+              "turns:YOUR-TURN-HOST:443?transport=tcp"
+            ],
+            username: "YOUR-TURN-USERNAME",
+            credential: "YOUR-TURN-CREDENTIAL"
+          }
+        ];
+
+      Note: anything in this file is visible to anyone who opens the page. Use a
+      provider plan with a usage cap, or short-lived credentials.
+    */
+    const TURN_SERVERS = [];
+
+    /* Set to true only while testing: forces every call through the TURN relay. */
+    const FORCE_RELAY = false;
+
     const RTC_CONFIG = {
-      iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }]
+      iceServers: [
+        { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+        ...TURN_SERVERS
+      ],
+      iceCandidatePoolSize: 4,
+      iceTransportPolicy: FORCE_RELAY ? "relay" : "all"
     };
     const RING_TIMEOUT_MS = 45000;
+    const CONNECT_TIMEOUT_MS = 25000;
     const STALE_CALL_MS = 90000;
+    const PROFILE_CACHE_MS = 30000;
 
     let currentUser = null;
     let currentProfile = null;
@@ -539,14 +573,21 @@
     let sendingMessage = false;
     let friendIsTyping = false;
 
+    /* Only the newest render of each list is allowed to draw. */
+    let friendsRenderId = 0;
+    let requestsRenderId = 0;
+    let searchRenderId = 0;
+
     /* Call state */
     let call = null;
     let incomingCall = null;
     let callHideTimer = null;
     let toastTimer = null;
+    let audioUnlockHandler = null;
 
     const deletingMessages = new Set();
     const receiptUpdates = new Set();
+    const profileCache = new Map();
 
     /* Unread message counts */
     const unreadCounts = new Map();
@@ -800,6 +841,9 @@
 
     /* ---------- Voice and video calls ---------- */
 
+    function callLog(...args) { console.log("[Celio call]", ...args); }
+    function callWarn(...args) { console.warn("[Celio call]", ...args); }
+
     function showToast(message) {
       const toast = $("callToast");
       toast.textContent = message;
@@ -941,10 +985,43 @@
       }
     }
 
+    function clearAudioUnlock() {
+      if (audioUnlockHandler) {
+        $("callOverlay").removeEventListener("pointerdown", audioUnlockHandler);
+        audioUnlockHandler = null;
+      }
+    }
+
+    /* Starts playing the friend's audio and video. Browsers sometimes block sound until a tap. */
+    function playRemoteMedia() {
+      const audio = $("remoteAudio");
+      const video = $("remoteVideo");
+
+      const videoAttempt = video.play();
+      if (videoAttempt && typeof videoAttempt.catch === "function") videoAttempt.catch(() => {});
+
+      const attempt = audio.play();
+      if (attempt && typeof attempt.catch === "function") {
+        attempt.catch(error => {
+          callWarn("The browser blocked the friend's audio until you interact with the page:", error?.name || error);
+          showToast("Tap anywhere on the call screen to turn on sound.");
+
+          if (audioUnlockHandler) return;
+          audioUnlockHandler = () => {
+            $("remoteAudio").play().then(clearAudioUnlock).catch(() => {});
+          };
+          $("callOverlay").addEventListener("pointerdown", audioUnlockHandler);
+        });
+      }
+    }
+
     function startCallTimer(c) {
       if (c.timer || call !== c) return;
       clearTimeout(c.ringTimer);
+      clearTimeout(c.connectTimer);
+      c.connected = true;
       c.connectedAt = Date.now();
+      callLog("Connected.");
 
       const tick = () => {
         const seconds = Math.floor((Date.now() - c.connectedAt) / 1000);
@@ -955,10 +1032,26 @@
       c.timer = setInterval(tick, 1000);
     }
 
+    /* If the two browsers can't reach each other, give up with a clear message instead of hanging. */
+    function armConnectTimer(c) {
+      clearTimeout(c.connectTimer);
+      c.connectTimer = setTimeout(() => {
+        if (call !== c || c.connected) return;
+        callWarn(
+          "Gave up: no media connection after", CONNECT_TIMEOUT_MS / 1000, "seconds.",
+          "ICE state:", c.pc && c.pc.iceConnectionState,
+          "| relay candidates found:", c.relayCount,
+          "| TURN configured:", TURN_SERVERS.length > 0
+        );
+        endCall("Couldn't connect the call. The network may be blocking it.");
+      }, CONNECT_TIMEOUT_MS);
+    }
+
     function createPeer(c) {
       const pc = new RTCPeerConnection(RTC_CONFIG);
       c.pc = pc;
       c.queued = [];
+      c.relayCount = 0;
       c.remoteStream = new MediaStream();
 
       /* The audio element plays the friend's voice. The video element is muted so nothing plays twice. */
@@ -980,11 +1073,44 @@
         } catch {}
       };
 
+      /* Diagnostics: shows whether a relay (TURN) path was found. */
+      pc.addEventListener("icecandidate", event => {
+        if (!event.candidate) return;
+        const match = / typ (\w+)/.exec(event.candidate.candidate || "");
+        const type = event.candidate.type || (match ? match[1] : "");
+        if (type === "relay") c.relayCount++;
+      });
+
+      pc.addEventListener("icegatheringstatechange", () => {
+        callLog("ICE gathering:", pc.iceGatheringState);
+        if (pc.iceGatheringState !== "complete") return;
+
+        callLog("Relay (TURN) candidates found:", c.relayCount);
+        if (!TURN_SERVERS.length) {
+          callWarn("No TURN server is configured, so calls between different networks will usually fail. See TURN_SERVERS in index.html.");
+        } else if (!c.relayCount) {
+          callWarn("A TURN server is configured but produced no relay candidate. Check its URL, username and credential, or whether this network blocks it.");
+        }
+      });
+
+      pc.addEventListener("icecandidateerror", event => {
+        callWarn("ICE candidate error:", event.errorCode, event.errorText, event.url || "");
+      });
+
       pc.ontrack = event => {
         if (call !== c) return;
         const track = event.track;
+        callLog("Received remote", track.kind, "track");
 
-        if (!c.remoteStream.getTracks().includes(track)) c.remoteStream.addTrack(track);
+        const stream = event.streams && event.streams[0] ? event.streams[0] : null;
+
+        if (stream && stream !== c.remoteStream) {
+          c.remoteStream = stream;
+          $("remoteAudio").srcObject = stream;
+          $("remoteVideo").srcObject = stream;
+        } else if (!stream && !c.remoteStream.getTracks().includes(track)) {
+          c.remoteStream.addTrack(track);
+        }
 
         if (track.kind === "audio" && !c.remoteMonitor) {
           c.remoteMonitor = createSpeakingMonitor(c.remoteStream, on => setSpeaking("remote", on));
@@ -994,11 +1120,22 @@
           c.remoteHasVideo = true;
           refreshRemoteVideo(c);
         }
+
+        playRemoteMedia();
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        if (call !== c) return;
+        callLog("ICE connection:", pc.iceConnectionState);
+
+        if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") startCallTimer(c);
+        else if (pc.iceConnectionState === "failed") endCall("Connection lost.");
       };
 
       pc.onconnectionstatechange = () => {
         if (call !== c) return;
         const state = pc.connectionState;
+        callLog("Connection:", state);
 
         if (state === "connected") startCallTimer(c);
         else if (state === "disconnected") updateCallStatus("Reconnecting...");
@@ -1017,7 +1154,7 @@
       try {
         await c.pc.addIceCandidate(new RTCIceCandidate(data));
       } catch (error) {
-        console.error("Could not add ICE candidate:", error);
+        callWarn("Could not add ICE candidate:", error);
       }
     }
 
@@ -1037,6 +1174,19 @@
       return Boolean(navigator.mediaDevices?.getUserMedia && window.RTCPeerConnection);
     }
 
+    /* Reports a blocked or failed write of call connection details. */
+    function reportSignalingError(c, error) {
+      console.error("[Celio call] Could not send call connection details:", error?.code, error?.message, error);
+      if (!c.signalWarned) {
+        c.signalWarned = true;
+        showToast(
+          error?.code === "permission-denied"
+            ? "Call setup was blocked by Firebase. Check your Firestore rules."
+            : "Call setup failed. Check your connection."
+        );
+      }
+    }
+
     /* Local cleanup. Safe to call more than once. */
     function finishCall(message) {
       const c = call;
@@ -1046,7 +1196,9 @@
       call = null;
 
       clearTimeout(c.ringTimer);
+      clearTimeout(c.connectTimer);
       clearInterval(c.timer);
+      clearAudioUnlock();
       c.unsubs.forEach(unsubscribe => { try { unsubscribe(); } catch {} });
 
       try { if (c.channel) c.channel.close(); } catch {}
@@ -1104,7 +1256,9 @@
         micOn: true,
         cameraOn: type === "video",
         remoteCameraOn: true,
-        remoteHasVideo: false
+        remoteHasVideo: false,
+        connected: false,
+        relayCount: 0
       };
 
       call = c;
@@ -1124,6 +1278,7 @@
 
         openCallUi(c, "Calling...");
         createPeer(c);
+        callLog("Starting", type, "call. TURN configured:", TURN_SERVERS.length > 0);
 
         const callRef = db.collection("calls").doc();
         c.id = callRef.id;
@@ -1133,7 +1288,7 @@
         let ready = false;
         const pending = [];
         const sendCandidate = data => {
-          callRef.collection("callerCandidates").add(data).catch(error => console.error("Candidate error:", error));
+          callRef.collection("callerCandidates").add(data).catch(error => reportSignalingError(c, error));
         };
 
         c.pc.onicecandidate = event => {
@@ -1169,27 +1324,29 @@
 
           if (data.answer && !c.answered) {
             c.answered = true;
+            clearTimeout(c.ringTimer);
             updateCallStatus("Connecting...");
+            armConnectTimer(c);
 
             c.pc.setRemoteDescription(new RTCSessionDescription(data.answer))
               .then(() => flushCandidates(c))
               .catch(error => {
-                console.error("Answer error:", error);
+                console.error("[Celio call] Answer error:", error);
                 endCall("Could not connect the call.");
               });
           }
 
           if (data.status === "declined") finishCall("Call declined.");
           else if (data.status === "ended") finishCall("Call ended.");
-        }, error => console.error("Call listener error:", error)));
+        }, error => console.error("[Celio call] Call listener error:", error)));
 
         c.unsubs.push(callRef.collection("calleeCandidates").onSnapshot(snapshot => {
           snapshot.docChanges().forEach(change => {
             if (change.type === "added" && call === c) addRemoteCandidate(c, change.doc.data());
           });
-        }, error => console.error("Candidate listener error:", error)));
+        }, error => console.error("[Celio call] Candidate listener error:", error)));
       } catch (error) {
-        console.error("Start call error:", error);
+        console.error("[Celio call] Start call error:", error);
         if (call === c) await endCall("");
         showToast(mediaErrorMessage(error));
       }
@@ -1252,7 +1409,7 @@
 
             showIncomingCall(doc.id, doc.ref, data);
           });
-        }, error => console.error("Incoming call listener error:", error));
+        }, error => console.error("[Celio call] Incoming call listener error:", error));
     }
 
     async function acceptIncomingCall() {
@@ -1276,7 +1433,9 @@
         cameraOn: type === "video",
         remoteCameraOn: true,
         remoteHasVideo: false,
-        answered: true
+        answered: true,
+        connected: false,
+        relayCount: 0
       };
 
       call = c;
@@ -1298,11 +1457,12 @@
 
         openCallUi(c, "Connecting...");
         createPeer(c);
+        callLog("Answering", type, "call. TURN configured:", TURN_SERVERS.length > 0);
 
         c.pc.onicecandidate = event => {
           if (!event.candidate) return;
           incoming.ref.collection("calleeCandidates").add(event.candidate.toJSON())
-            .catch(error => console.error("Candidate error:", error));
+            .catch(error => reportSignalingError(c, error));
         };
 
         await c.pc.setRemoteDescription(new RTCSessionDescription(fresh.data().offer));
@@ -1315,21 +1475,22 @@
           answeredAt: serverTimestamp()
         });
 
+        armConnectTimer(c);
         await flushCandidates(c);
 
         c.unsubs.push(incoming.ref.onSnapshot(snapshot => {
           if (call !== c || !snapshot.exists) return;
           const status = snapshot.data().status;
           if (status === "ended" || status === "declined") finishCall("Call ended.");
-        }, error => console.error("Call listener error:", error)));
+        }, error => console.error("[Celio call] Call listener error:", error)));
 
         c.unsubs.push(incoming.ref.collection("callerCandidates").onSnapshot(snapshot => {
           snapshot.docChanges().forEach(change => {
             if (change.type === "added" && call === c) addRemoteCandidate(c, change.doc.data());
           });
-        }, error => console.error("Candidate listener error:", error)));
+        }, error => console.error("[Celio call] Candidate listener error:", error)));
       } catch (error) {
-        console.error("Accept call error:", error);
+        console.error("[Celio call] Accept call error:", error);
         if (call === c) await endCall("");
         showToast(mediaErrorMessage(error));
       }
@@ -1727,28 +1888,47 @@
       return snapshot.exists ? { uid, ...snapshot.data() } : null;
     }
 
+    /* Short-lived cache so list updates don't re-download every profile each time. */
+    function getProfileCached(uid) {
+      const hit = profileCache.get(uid);
+      if (hit && Date.now() - hit.at < PROFILE_CACHE_MS) return hit.promise;
+
+      const promise = getProfile(uid).catch(error => {
+        profileCache.delete(uid);
+        throw error;
+      });
+
+      profileCache.set(uid, { at: Date.now(), promise });
+      return promise;
+    }
+
     async function hasMutualFriendship(friendId) {
       if (!currentUser || friendId === currentUser.uid) return false;
 
-      const mine = await db.collection("friends").doc(currentUser.uid)
-        .collection("contacts").doc(friendId).get();
-
-      const theirs = await db.collection("friends").doc(friendId)
-        .collection("contacts").doc(currentUser.uid).get();
+      const [mine, theirs] = await Promise.all([
+        db.collection("friends").doc(currentUser.uid).collection("contacts").doc(friendId).get(),
+        db.collection("friends").doc(friendId).collection("contacts").doc(currentUser.uid).get()
+      ]);
 
       return mine.exists && theirs.exists;
     }
 
     async function renderSearchResult(profile) {
+      const renderId = ++searchRenderId;
       const subtitle = profile.celioNumber ? formatCelioNumber(profile.celioNumber) : "Celio user";
       const box = $("searchResults");
-      box.replaceChildren();
+
+      /* Only the newest search render may draw. */
+      const show = row => {
+        if (renderId !== searchRenderId) return;
+        box.replaceChildren(row);
+      };
 
       const contact = await db.collection("friends").doc(currentUser.uid)
         .collection("contacts").doc(profile.uid).get();
 
       if (contact.exists) {
-        box.appendChild(makePersonRow(profile, subtitle + " · Already friends", [{
+        show(makePersonRow(profile, subtitle + " · Already friends", [{
           label: "Message",
           className: "primary",
           onClick: () => openChat(profile.uid, profile.username)
@@ -1756,23 +1936,24 @@
         return;
       }
 
-      const outgoing = await db.collection("friendRequests")
-        .where("senderId", "==", currentUser.uid)
-        .where("receiverId", "==", profile.uid)
-        .where("status", "==", "pending").limit(1).get();
+      const [outgoing, incoming] = await Promise.all([
+        db.collection("friendRequests")
+          .where("senderId", "==", currentUser.uid)
+          .where("receiverId", "==", profile.uid)
+          .where("status", "==", "pending").limit(1).get(),
+        db.collection("friendRequests")
+          .where("senderId", "==", profile.uid)
+          .where("receiverId", "==", currentUser.uid)
+          .where("status", "==", "pending").limit(1).get()
+      ]);
 
       if (!outgoing.empty) {
-        box.appendChild(makePersonRow(profile, subtitle + " · Request sent"));
+        show(makePersonRow(profile, subtitle + " · Request sent"));
         return;
       }
 
-      const incoming = await db.collection("friendRequests")
-        .where("senderId", "==", profile.uid)
-        .where("receiverId", "==", currentUser.uid)
-        .where("status", "==", "pending").limit(1).get();
-
       if (!incoming.empty) {
-        box.appendChild(makePersonRow(profile, subtitle + " · They sent you a request", [{
+        show(makePersonRow(profile, subtitle + " · They sent you a request", [{
           label: "View requests",
           className: "secondary",
           onClick: () => showPage("requests")
@@ -1780,7 +1961,7 @@
         return;
       }
 
-      box.appendChild(makePersonRow(profile, subtitle, [{
+      show(makePersonRow(profile, subtitle, [{
         label: "Add friend",
         className: "primary",
         onClick: () => sendFriendRequest(profile)
@@ -1791,6 +1972,7 @@
     async function searchUsers(event) {
       event.preventDefault();
       const rawQuery = $("friendSearchInput").value.trim();
+      searchRenderId++;
       $("searchResults").replaceChildren();
       setStatus("friendsStatus", "");
 
@@ -1905,40 +2087,62 @@
 
       friendsUnsubscribe = db.collection("friends").doc(currentUser.uid)
         .collection("contacts")
-        .onSnapshot(async snapshot => {
+        .onSnapshot(snapshot => {
           friendsCache = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
           syncUnreadListeners(friendsCache);
-          await renderFriends();
+          renderFriends();
         }, error => {
           console.error(error);
           setStatus("friendsStatus", friendlyError(error), "error");
         });
     }
 
+    /*
+      Loads all profiles at once, then draws the whole list in one go.
+      If a newer update arrives while this one is loading, this one stops.
+    */
     async function renderFriends() {
-      const list = $("friendsList");
-      list.replaceChildren();
+      const renderId = ++friendsRenderId;
+      const friends = friendsCache.slice();
 
-      if (!friendsCache.length) {
+      if (!friends.length) {
         renderEmpty("friendsList", "No friends yet. Enter a Celio number above to add someone.");
         return;
       }
 
-      for (const friend of friendsCache) {
-        const profile = await getProfile(friend.uid);
-        if (!profile) continue;
+      const profiles = await Promise.all(
+        friends.map(friend => getProfileCached(friend.uid).catch(error => {
+          console.error("[Celio] Could not load a friend's profile:", error?.code, error?.message);
+          return null;
+        }))
+      );
 
-        const row = makePersonRow(profile, "Friend", [{
+      if (renderId !== friendsRenderId) return;
+
+      const list = $("friendsList");
+      const seen = new Set();
+      const rows = [];
+
+      profiles.forEach(profile => {
+        if (!profile || seen.has(profile.uid)) return;
+        seen.add(profile.uid);
+
+        rows.push(makePersonRow(profile, "Friend", [{
           label: "Message",
           className: "primary",
           onClick: () => openChat(profile.uid, profile.username)
-        }], { unreadBadge: true });
+        }], { unreadBadge: true }));
+      });
 
-        list.appendChild(row);
-        updateFriendUnreadBadge(profile.uid, unreadCounts.get(profile.uid) || 0);
+      if (!rows.length) {
+        renderEmpty("friendsList", "Your friends will appear here.");
+        return;
       }
 
-      if (!list.children.length) renderEmpty("friendsList", "Your friends will appear here.");
+      list.replaceChildren(...rows);
+      profiles.forEach(profile => {
+        if (profile) updateFriendUnreadBadge(profile.uid, unreadCounts.get(profile.uid) || 0);
+      });
     }
 
     function startRequestsListener() {
@@ -1947,9 +2151,9 @@
       requestsUnsubscribe = db.collection("friendRequests")
         .where("receiverId", "==", currentUser.uid)
         .where("status", "==", "pending")
-        .onSnapshot(async snapshot => {
+        .onSnapshot(snapshot => {
           requestsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          await renderRequests();
+          renderRequests();
         }, error => {
           console.error(error);
           setStatus("requestsStatus", friendlyError(error), "error");
@@ -1957,23 +2161,41 @@
     }
 
     async function renderRequests() {
-      const list = $("requestsList");
-      list.replaceChildren();
+      const renderId = ++requestsRenderId;
+      const requests = requestsCache.slice();
 
-      if (!requestsCache.length) {
+      if (!requests.length) {
         renderEmpty("requestsList", "You don't have any pending requests.");
         return;
       }
 
-      for (const request of requestsCache) {
-        const profile = await getProfile(request.senderId);
-        if (!profile) continue;
+      const profiles = await Promise.all(
+        requests.map(request => getProfileCached(request.senderId).catch(error => {
+          console.error("[Celio] Could not load a requester's profile:", error?.code, error?.message);
+          return null;
+        }))
+      );
 
-        list.appendChild(makePersonRow(profile, "Incoming friend request", [
+      if (renderId !== requestsRenderId) return;
+
+      const rows = [];
+
+      requests.forEach((request, index) => {
+        const profile = profiles[index];
+        if (!profile) return;
+
+        rows.push(makePersonRow(profile, "Incoming friend request", [
           { label: "Accept", className: "primary", onClick: () => acceptFriendRequest(request) },
           { label: "Decline", className: "danger", onClick: () => rejectFriendRequest(request) }
         ]));
+      });
+
+      if (!rows.length) {
+        renderEmpty("requestsList", "You don't have any pending requests.");
+        return;
       }
+
+      $("requestsList").replaceChildren(...rows);
     }
 
     async function acceptFriendRequest(request) {
@@ -2427,14 +2649,13 @@
             const changes = snapshot.docChanges();
 
             if (snapshot.empty) {
-              if (!messages.querySelector(".chat-empty")) {
-                messages.replaceChildren();
+              /* Replaces the "Opening conversation..." text (and any leftover rows) with the empty-chat message. */
+              messages.replaceChildren();
 
-                const empty = document.createElement("div");
-                empty.className = "chat-empty";
-                empty.textContent = "This is the beginning of your conversation.";
-                messages.appendChild(empty);
-              }
+              const empty = document.createElement("div");
+              empty.className = "chat-empty";
+              empty.textContent = "This is the beginning of your conversation.";
+              messages.appendChild(empty);
 
               renderTypingBubble();
               return;
@@ -3197,6 +3418,10 @@
       friendsCache = [];
       requestsCache = [];
       friendIsTyping = false;
+      profileCache.clear();
+      friendsRenderId++;
+      requestsRenderId++;
+      searchRenderId++;
 
       if (!user) {
         setupUser = null;
