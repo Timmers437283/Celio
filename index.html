@@ -513,30 +513,22 @@
     const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,24}$/;
     const USERNAME_HELP = "Usernames must be 3–24 characters and use only letters, numbers, and underscores.";
 
-    /*
-      ---------- CALL NETWORK SETTINGS ----------
-
-      Calls go directly between two browsers when they can. On different networks
-      (school, work, mobile data) that usually fails unless a TURN relay server
-      passes the audio and video along. Paste the server details from your TURN
-      provider below. Example (replace every value with your provider's own):
-
-        const TURN_SERVERS = [
-          {
-            urls: [
-              "turn:YOUR-TURN-HOST:80",
-              "turn:YOUR-TURN-HOST:443?transport=tcp",
-              "turns:YOUR-TURN-HOST:443?transport=tcp"
-            ],
-            username: "YOUR-TURN-USERNAME",
-            credential: "YOUR-TURN-CREDENTIAL"
-          }
-        ];
-
-      Note: anything in this file is visible to anyone who opens the page. Use a
-      provider plan with a usage cap, or short-lived credentials.
+    /* ---------- CALL NETWORK SETTINGS ----------
+       Do not publish long-lived TURN credentials in public frontend code.
+       Replace the placeholders below with newly rotated Metered credentials.
     */
-    const TURN_SERVERS = [];
+    const TURN_SERVERS = [
+      {
+        urls: [
+          "turn:us.relay.metered.ca:80",
+          "turn:us.relay.metered.ca:80?transport=tcp",
+          "turn:us.relay.metered.ca:443",
+          "turns:us.relay.metered.ca:443?transport=tcp"
+        ],
+        username: "YOUR_NEW_METERED_USERNAME",
+        credential: "YOUR_NEW_METERED_CREDENTIAL"
+      }
+    ];
 
     /* Set to true only while testing: forces every call through the TURN relay. */
     const FORCE_RELAY = false;
