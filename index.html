@@ -313,8 +313,8 @@
     .friends-heading-row h3 { margin:0; text-align:center; font-size:16px; font-weight:600; }
     .friends-heading-row button { position:absolute; right:0; }
     .group-list-item { display:flex; align-items:center; gap:12px; width:100%; padding:13px 14px; text-align:left; border:1px solid var(--border); border-radius:12px; background:var(--panel); color:var(--text); cursor:pointer; }
-    .group-list-item:hover { background:var(--hover); }
-    .group-icon { width:42px; height:42px; border-radius:5px; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:#20232a; font-size:21px; }
+    .group-list-item:hover { background:#1a1a1a; }
+    .group-icon { width:42px; height:42px; border-radius:5px; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:#20232a; font-size:21px; overflow:hidden; }
     .group-list-copy { min-width:0; flex:1; }
     .group-list-copy strong,.group-list-copy span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .group-list-copy span { margin-top:4px; font-size:12px; color:var(--muted); }
@@ -700,10 +700,11 @@
     const USERNAME_HELP = "Usernames must be 3–24 characters and use only letters, numbers, and underscores.";
 
     /* ---------- CALL NETWORK SETTINGS ----------
-       Do not publish long-lived TURN credentials in public frontend code.
+       Calls between different networks need a TURN relay.
        Replace the placeholders below with newly rotated Metered credentials.
+       Entries that still contain the placeholder are ignored automatically.
     */
-    const TURN_SERVERS = [
+    const TURN_SERVERS_RAW = [
       {
         urls: [
           "turn:us.relay.metered.ca:80",
@@ -715,6 +716,10 @@
         credential: "YOUR_NEW_METERED_CREDENTIAL"
       }
     ];
+
+    const TURN_SERVERS = TURN_SERVERS_RAW.filter(s =>
+      s.username && s.credential && !String(s.username).startsWith("YOUR_")
+    );
 
     /* Set to true only while testing: forces every call through the TURN relay. */
     const FORCE_RELAY = false;
@@ -744,6 +749,7 @@
     let activeGroupData = null;
     let groupMembersModalBusy = false;
     let groupsUnsubscribe = null;
+    let groupDocUnsubscribe = null;
     let groupsCache = [];
     let groupModalMode = "create";
     let editingGroupId = null;
@@ -1891,13 +1897,22 @@
           snapshot.docChanges().forEach(change => {
             if (change.type !== "added" && change.type !== "modified") return;
             const data = change.doc.data();
-            if (!data || !["ringing", "active"].includes(data.status)) return;
+            if (!data) return;
+
+            if (data.status === "ended") {
+              if (incomingCall && incomingCall.id === change.doc.id) hideIncomingCall();
+              return;
+            }
+            if (!["ringing", "active"].includes(data.status)) return;
             if ((data.joinedIds || []).includes(currentUser.uid)) return;
             if (declinedGroupCalls.has(change.doc.id)) return;
+
+            /* Only ring for calls that just started, so old unfinished rooms never ring again. */
             const created = data.createdAt && typeof data.createdAt.toMillis === "function" ? data.createdAt.toMillis() : 0;
-            if (data.status === "ringing" && created && Date.now() - created > STALE_CALL_MS) return;
-            if (call || (incomingCall && incomingCall.id !== change.doc.id)) return;
-            if (incomingCall && incomingCall.id === change.doc.id) return;
+            if (created && Date.now() - created > STALE_CALL_MS) return;
+
+            if (call) return;
+            if (incomingCall) return;
             showIncomingCall(change.doc.id, change.doc.ref, { ...data, isGroupCall: true });
           });
         }, error => console.error("[Celio call] Group-call listener error:", error));
@@ -2216,13 +2231,14 @@
     }
 
     function stopListeners() {
-      [friendsUnsubscribe, requestsUnsubscribe, groupsUnsubscribe, messagesUnsubscribe, typingUnsubscribe, incomingCallsUnsubscribe, groupCallsUnsubscribe].forEach(unsubscribe => {
+      [friendsUnsubscribe, requestsUnsubscribe, groupsUnsubscribe, groupDocUnsubscribe, messagesUnsubscribe, typingUnsubscribe, incomingCallsUnsubscribe, groupCallsUnsubscribe].forEach(unsubscribe => {
         if (unsubscribe) unsubscribe();
       });
 
       friendsUnsubscribe = null;
       requestsUnsubscribe = null;
       groupsUnsubscribe = null;
+      groupDocUnsubscribe = null;
       messagesUnsubscribe = null;
       typingUnsubscribe = null;
       incomingCallsUnsubscribe = null;
@@ -2241,9 +2257,11 @@
 
       if (messagesUnsubscribe) messagesUnsubscribe();
       if (typingUnsubscribe) typingUnsubscribe();
+      if (groupDocUnsubscribe) groupDocUnsubscribe();
 
       messagesUnsubscribe = null;
       typingUnsubscribe = null;
+      groupDocUnsubscribe = null;
       activeChatId = null;
       activeFriendId = null;
       activeChatKind = "direct";
@@ -2252,12 +2270,11 @@
       $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden"); $("leaveGroupButton").classList.add("hidden");
       friendIsTyping = false;
       setCallButtonsDisabled(true);
-      $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden");
       $("messagesList").replaceChildren();
     }
 
     function showPage(page) {
-      if (page === "friends") page = "home";
+      if (page === "friends" || page === "requests") page = "home";
       closeActiveChat();
       $("friendsPage").classList.toggle("hidden", page !== "home");
       $("requestsPage").classList.add("hidden");
@@ -2465,7 +2482,7 @@
         show(makePersonRow(profile, subtitle + " · They sent you a request", [{
           label: "View requests",
           className: "secondary",
-          onClick: () => showPage("requests")
+          onClick: () => showPage("home")
         }]));
         return;
       }
@@ -2681,9 +2698,12 @@
     function confirmRemoveFriend(friendName) {
       return new Promise(resolve => {
         const modal = $("removeFriendModal");
+        const title = $("removeFriendTitle");
         const message = $("removeFriendMessage");
         const cancel = $("cancelRemoveFriend");
         const confirm = $("confirmRemoveFriend");
+        title.textContent = "Are you sure?";
+        confirm.textContent = "Remove friend";
         message.textContent = `Are you sure you want to remove ${friendName} from your friends?`;
         modal.classList.remove("hidden");
         confirm.focus();
@@ -3008,6 +3028,7 @@
 
       let receipt = meta.querySelector(".message-receipt");
       if (!receipt) {
+        if (!activeFriendId) return;
         receipt = document.createElement("span");
         receipt.className = "message-receipt";
         meta.appendChild(receipt);
@@ -3196,7 +3217,7 @@
       $("chatFriendName").textContent = friendName || "Conversation";
       renderAvatarInto($("chatAvatar"), await getProfile(friendId) || { username: friendName });
       $("chatSubtitle").textContent = "Direct message";
-      $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden");
+      $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden"); $("leaveGroupButton").classList.add("hidden");
       $("messagesList").replaceChildren();
 
       const loading = document.createElement("div");
@@ -3244,7 +3265,7 @@
         activeChatKind = "direct";
         activeChatMembers = [currentUser.uid, friendId];
         activeGroupData = null;
-        $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden");
+        $("groupManageButton").classList.add("hidden"); $("groupMembersButton").classList.add("hidden"); $("leaveGroupButton").classList.add("hidden");
         $("messageInput").disabled = false;
         $("sendButton").disabled = false;
         $("attachButton").disabled = false;
@@ -3295,7 +3316,7 @@
                 const row = renderMessage(change.doc, friendName, chatId);
                 const targetIndex = orderedIds.indexOf(messageId);
 
-                const nextRow = [...messages.querySelectorAll(".message-row")].find(item => {
+                const nextRow = [...messages.querySelectorAll("[data-message-id]")].find(item => {
                   const itemIndex = orderedIds.indexOf(item.dataset.messageId);
                   return itemIndex !== -1 && itemIndex > targetIndex;
                 });
@@ -3370,7 +3391,6 @@
       const chatId = activeChatId;
       const friendId = activeFriendId;
       const chatRef = db.collection("chats").doc(chatId);
-      const chatKind = activeChatKind;
 
       sendingMessage = true;
       $("sendButton").disabled = true;
@@ -3542,7 +3562,9 @@
         if (!profile) { $("groupSearchStatus").textContent = "No user found with that Celio number."; return; }
         if (profile.uid === currentUser.uid) { $("groupSearchStatus").textContent = "You are already in this group."; return; }
         groupSearchResults = [profile, ...groupSearchResults.filter(item => item.uid !== profile.uid)];
-        const existing = new Set([...$("groupMemberPicker").querySelectorAll('input[type="checkbox"]')].map(input => input.value));
+        /* Keep only the people already ticked, and tick the person just found. */
+        const existing = new Set([...$("groupMemberPicker").querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value));
+        existing.add(profile.uid);
         await renderGroupMemberPicker([...existing]);
         $("groupSearchStatus").textContent = `${profile.username || formatCelioNumber(profile.celioNumber)} is ready to select.`;
       } catch (error) {
@@ -3587,8 +3609,7 @@
           }
           if (!added.length && !removed.length) await ref.collection("messages").add({ messageType:"system", text:`${currentProfile.username || "Someone"} updated the group details.`, senderId:currentUser.uid, senderUsername:currentProfile.username || "Celio user", createdAt:serverTimestamp(), deliveredTo:[], readBy:[] });
           closeGroupModal();
-          const updated = await ref.get();
-          await openGroupChat(editingGroupId);
+          if (activeChatId !== editingGroupId) await openGroupChat(editingGroupId);
         }
       } catch (error) {
         console.error("Could not save group:", error); $("groupFormStatus").textContent = friendlyError(error);
@@ -3682,6 +3703,10 @@
       button.disabled = true;
       setStatus("chatStatus", "Leaving group...");
       try {
+        /* Stop listening first, otherwise our own listeners error out the moment we are removed. */
+        if (messagesUnsubscribe) messagesUnsubscribe(); messagesUnsubscribe = null;
+        if (groupDocUnsubscribe) groupDocUnsubscribe(); groupDocUnsubscribe = null;
+
         const ref = db.collection("chats").doc(group.id);
         const snapshot = await ref.get();
         if (!snapshot.exists) throw new Error("This group is no longer available.");
@@ -3689,6 +3714,7 @@
         const participants = (latest.participants || []).filter(uid => uid !== currentUser.uid);
         if (participants.length === (latest.participants || []).length) throw new Error("You are no longer a member of this group.");
 
+        /* The notice must be written BEFORE leaving, while we are still a member. */
         await ref.collection("messages").add({
           messageType: "system",
           text: `${currentProfile?.username || "Someone"} left the group.`,
@@ -3705,6 +3731,8 @@
       } catch (error) {
         console.error("Could not leave group:", error?.code, error?.message || error);
         setStatus("chatStatus", friendlyError(error), "error");
+        /* Leaving failed, so reopen the group with its live listeners. */
+        openGroupChat(group.id);
       } finally {
         button.disabled = false;
       }
@@ -3744,20 +3772,46 @@
       $("messagesList").replaceChildren();
       const loading = document.createElement("div"); loading.className = "chat-empty"; loading.textContent = "Opening group..."; $("messagesList").appendChild(loading);
       $("messageInput").value = ""; $("messageInput").disabled = true; $("sendButton").disabled = true; $("attachButton").disabled = true;
-      setCallButtonsDisabled(true); $("groupManageButton").classList.remove("hidden"); $("groupMembersButton").classList.remove("hidden"); $("leaveGroupButton").classList.remove("hidden"); setStatus("chatStatus", "");
+      setCallButtonsDisabled(true);
+      $("groupManageButton").classList.remove("hidden"); $("groupMembersButton").classList.remove("hidden"); $("leaveGroupButton").classList.remove("hidden");
+      setStatus("chatStatus", "");
       try {
-        const chatRef = db.collection("chats").doc(groupId); const snapshot = await chatRef.get();
+        const chatRef = db.collection("chats").doc(groupId);
+        const snapshot = await chatRef.get();
         if (!snapshot.exists) throw new Error("This group is unavailable.");
         const data = snapshot.data(); const members = data.participants || [];
         if (data.chatType !== "group" || !members.includes(currentUser.uid)) throw new Error("You are not a member of this group.");
-        activeChatId = groupId; activeFriendId = null; activeChatKind = "group"; activeChatMembers = members; activeGroupData = { id:groupId, ...data };
-        $("chatFriendName").textContent = data.name || "Group chat";
-        const chatAvatar = $("chatAvatar"); chatAvatar.replaceChildren();
-        if (typeof data.icon === "string" && /^https?:\/\//i.test(data.icon)) { const image = document.createElement("img"); image.src = data.icon; image.alt = ""; image.className = "group-icon-image"; chatAvatar.appendChild(image); }
-        else chatAvatar.textContent = data.icon || "👥";
-        $("chatSubtitle").textContent = `${members.length} members`;
+
+        activeChatId = groupId; activeFriendId = null; activeChatKind = "group"; activeChatMembers = members; activeGroupData = { id: groupId, ...data };
+
+        const paintGroupHeader = d => {
+          $("chatFriendName").textContent = d.name || "Group chat";
+          const avatar = $("chatAvatar"); avatar.replaceChildren();
+          if (typeof d.icon === "string" && /^https?:\/\//i.test(d.icon)) {
+            const image = document.createElement("img"); image.src = d.icon; image.alt = ""; image.className = "group-icon-image"; avatar.appendChild(image);
+          } else avatar.textContent = d.icon || "👥";
+          $("chatSubtitle").textContent = `${(d.participants || []).length} members`;
+        };
+        paintGroupHeader(data);
+
         $("messageInput").disabled = false; $("sendButton").disabled = false; $("attachButton").disabled = false;
+        setCallButtonsDisabled(Boolean(call));          /* group call buttons were never re-enabled before */
         $("groupManageButton").onclick = () => showGroupModal("edit", activeGroupData);
+
+        /* Keep group info live so calls use the current member list and removals are noticed. */
+        groupDocUnsubscribe = chatRef.onSnapshot(snap => {
+          if (activeChatId !== groupId) return;
+          const d = snap.exists ? snap.data() : null;
+          if (!d || !(d.participants || []).includes(currentUser.uid)) {
+            closeActiveChat(); showPage("home"); showToast("You are no longer in that group.");
+            return;
+          }
+          activeGroupData = { id: groupId, ...d };
+          activeChatMembers = d.participants || [];
+          paintGroupHeader(d);
+          setCallButtonsDisabled(Boolean(call));
+        }, error => console.error("Group listener error:", error));
+
         messagesUnsubscribe = chatRef.collection("messages").orderBy("createdAt", "asc").limitToLast(100).onSnapshot(snapshot => {
           if (activeChatId !== groupId) return;
           const messages = $("messagesList"); const nearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
@@ -3774,7 +3828,7 @@
               if (nextRow) messages.insertBefore(row, nextRow); else messages.appendChild(row);
             } else if (change.type === "modified") updateMessageMeta(existing, change.doc.data(), change.doc.data().senderId === currentUser.uid);
           });
-          if (nearBottom) requestAnimationFrame(() => { if (activeChatId === groupId) messages.scrollTo({top:messages.scrollHeight,behavior:"smooth"}); });
+          if (nearBottom) requestAnimationFrame(() => { if (activeChatId === groupId) messages.scrollTo({ top: messages.scrollHeight, behavior: "smooth" }); });
           updateIncomingReceipts(snapshot.docs, groupId);
         }, error => { console.error("Group message listener error:", error); setStatus("chatStatus", friendlyError(error), "error"); });
       } catch (error) { console.error(error); $("messagesList").replaceChildren(); setStatus("chatStatus", friendlyError(error), "error"); }
@@ -3822,7 +3876,7 @@
     }
 
     async function sendMedia(file) {
-      if (!file || !activeChatId || !activeFriendId || sendingMessage) return;
+      if (!file || !activeChatId || (activeChatKind !== "group" && !activeFriendId) || sendingMessage) return;
 
       const isVideo = file.type.startsWith("video/");
       const isImage = file.type.startsWith("image/");
@@ -3855,7 +3909,6 @@
       const chatId = activeChatId;
       const friendId = activeFriendId;
       const chatRef = db.collection("chats").doc(chatId);
-      const chatKind = activeChatKind;
       const caption = $("messageInput").value.trim();
 
       sendingMessage = true;
@@ -4327,7 +4380,6 @@
         currentProfile = { ...currentProfile, avatarUrl };
         renderAvatarInto($("accountAvatar"), currentProfile);
         renderAvatarInto($("profileAvatarButton"), currentProfile);
-        if (activeChatId) renderAvatarInto($("chatAvatar"), currentProfile);
         closeCropModal();
         setStatus("pictureStatus", "Profile picture updated.", "success");
       } catch (error) {
