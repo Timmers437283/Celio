@@ -665,6 +665,7 @@
     <div class="call-controls">
       <button id="muteButton" class="secondary" type="button">Mute</button>
       <button id="cameraButton" class="secondary hidden" type="button">Camera off</button>
+      <button id="pipButton" class="secondary hidden" type="button">Pop out</button>
       <button id="endCallButton" class="end-call" type="button">End</button>
     </div>
   </div>
@@ -1158,11 +1159,145 @@
       $("cameraButton").textContent = "Camera off";
       $("cameraButton").classList.remove("active");
       $("cameraButton").classList.toggle("hidden", c.type !== "video");
+      $("pipButton").textContent = "Pop out";
+      $("pipButton").classList.remove("active");
+      $("pipButton").classList.toggle("hidden", !pipSupported());
 
       updateCallStatus(statusText);
       $("callOverlay").classList.remove("hidden");
 
       c.localMonitor = createSpeakingMonitor(c.localStream, on => setSpeaking("local", on));
+    }
+
+    /* ---------- Picture-in-picture ---------- */
+    let pip = null;
+
+    function pipSupported() {
+      return Boolean(document.pictureInPictureEnabled && HTMLCanvasElement.prototype.captureStream);
+    }
+
+    /* Draws every visible call tile (you, the friend, or all group members) onto one canvas. */
+    function drawPipFrame(canvas, ctx) {
+      const W = canvas.width, H = canvas.height;
+      ctx.fillStyle = "#0c0c0c";
+      ctx.fillRect(0, 0, W, H);
+
+      const tiles = [...document.querySelectorAll("#callStage .call-tile")]
+        .filter(el => !el.classList.contains("hidden"));
+      if (!tiles.length) return;
+
+      const cols = Math.ceil(Math.sqrt(tiles.length));
+      const rows = Math.ceil(tiles.length / cols);
+      const gap = 6;
+      const cw = (W - gap * (cols + 1)) / cols;
+      const ch = (H - gap * (rows + 1)) / rows;
+
+      tiles.forEach((el, i) => {
+        const x = gap + (i % cols) * (cw + gap);
+        const y = gap + Math.floor(i / cols) * (ch + gap);
+        const video = el.querySelector("video");
+        const name = el.querySelector(".call-name")?.textContent || "";
+        const speaking = el.classList.contains("speaking");
+        const live = el.classList.contains("has-video") && video && video.readyState >= 2 && video.videoWidth;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, cw, ch);
+        ctx.clip();
+        ctx.fillStyle = "#1a1a1a";
+        ctx.fillRect(x, y, cw, ch);
+
+        if (live) {
+          const s = Math.max(cw / video.videoWidth, ch / video.videoHeight);
+          const dw = video.videoWidth * s, dh = video.videoHeight * s;
+          const dx = x + (cw - dw) / 2, dy = y + (ch - dh) / 2;
+          if (el.id === "localTile") {            /* mirror your own camera like the main screen */
+            ctx.translate(x + cw / 2, 0);
+            ctx.scale(-1, 1);
+            ctx.translate(-(x + cw / 2), 0);
+          }
+          ctx.drawImage(video, dx, dy, dw, dh);
+        } else {
+          const r = Math.min(cw, ch) * 0.22;
+          ctx.fillStyle = "#2a2f3a";
+          ctx.beginPath();
+          ctx.arc(x + cw / 2, y + ch / 2, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#d9eaff";
+          ctx.font = `600 ${r}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText((name.trim()[0] || "?").toUpperCase(), x + cw / 2, y + ch / 2);
+        }
+        ctx.restore();
+
+        ctx.font = "600 15px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = "rgba(0,0,0,.55)";
+        const label = name.length > 22 ? name.slice(0, 21) + "…" : name;
+        const tw = ctx.measureText(label).width + 14;
+        ctx.fillRect(x + 8, y + ch - 30, tw, 22);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(label, x + 15, y + ch - 14);
+
+        if (speaking) {
+          ctx.strokeStyle = "#2ecc71";
+          ctx.lineWidth = 4;
+          ctx.strokeRect(x + 2, y + 2, cw - 4, ch - 4);
+        }
+      });
+    }
+
+    function stopPip() {
+      const p = pip;
+      if (!p) return;
+      pip = null;
+      try { p.worker.terminate(); } catch {}
+      try { URL.revokeObjectURL(p.workerUrl); } catch {}
+      try { p.stream.getTracks().forEach(t => t.stop()); } catch {}
+      p.video.remove();
+      if (document.pictureInPictureElement === p.video) document.exitPictureInPicture().catch(() => {});
+      $("pipButton").textContent = "Pop out";
+      $("pipButton").classList.remove("active");
+    }
+
+    async function togglePip() {
+      if (pip) { stopPip(); return; }
+      if (!call || !pipSupported()) return;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 960;
+      canvas.height = 540;
+      const ctx = canvas.getContext("2d");
+      drawPipFrame(canvas, ctx);
+
+      const stream = canvas.captureStream(20);
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+      video.style.cssText = "position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;bottom:0;left:0";
+      document.body.appendChild(video);
+
+      /* A Worker timer keeps drawing at full speed even when this tab is in the background. */
+      const workerUrl = URL.createObjectURL(new Blob(["setInterval(()=>postMessage(0),50)"], { type: "text/javascript" }));
+      const worker = new Worker(workerUrl);
+      worker.onmessage = () => drawPipFrame(canvas, ctx);
+
+      pip = { video, stream, worker, workerUrl };
+
+      try {
+        await video.play();
+        await video.requestPictureInPicture();
+        video.addEventListener("leavepictureinpicture", stopPip, { once: true });
+        $("pipButton").textContent = "Close pop-out";
+        $("pipButton").classList.add("active");
+      } catch (error) {
+        console.error("[Celio call] Picture-in-picture failed:", error);
+        stopPip();
+        showToast("Couldn't open picture-in-picture in this browser.");
+      }
     }
 
     function hideCallUi() {
@@ -1434,6 +1569,7 @@
       c.finished = true;
       if (c.connectedAt) void saveCompletedCallMessage(c, Date.now());
       call = null;
+      stopPip();
 
       clearTimeout(c.ringTimer);
       clearTimeout(c.connectTimer);
@@ -4145,6 +4281,7 @@
     $("declineCallButton").addEventListener("click", declineIncomingCall);
     $("muteButton").addEventListener("click", toggleMute);
     $("cameraButton").addEventListener("click", toggleCamera);
+    $("pipButton").addEventListener("click", togglePip);
     $("endCallButton").addEventListener("click", () => endCall("Call ended."));
 
     $("changeNameForm").addEventListener("submit", async event => {
